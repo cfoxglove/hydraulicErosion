@@ -21,23 +21,13 @@ public class Erosion : EditorWindow {
 
     private int[] m_texDim = { 256, 256 };
     
-    private RenderTexture m_InHeightRT;
+    private RenderTexture m_TerrainHeightRT;
     private RenderTexture m_PrecipMaskRT;
-    
     private RenderTexture m_WaterRT;
     private RenderTexture m_WaterVelRT;
-
     private RenderTexture m_FluxRT;
-
-    
-
-    /*
-    private RenderTexture m_LoamRT;
     private RenderTexture m_SedimentRT;
-    private RenderTexture m_TempSedimentRT;
-    private RenderTexture m_WaterVelRT;
-    private RenderTexture m_FluxRT;
-    */
+    //private RenderTexture m_TerrainNormalsRT;
 
     // Add menu named "My Window" to the Window menu
     [MenuItem("Tools/Erosion")]
@@ -49,10 +39,10 @@ public class Erosion : EditorWindow {
     void InitData() {
         if(m_Init == true) { return; }
 
-        m_InHeightRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
-        m_InHeightRT.format = RenderTextureFormat.RFloat;
-        m_InHeightRT.enableRandomWrite = true;
-        m_InHeightRT.Create();
+        m_TerrainHeightRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_TerrainHeightRT.format = RenderTextureFormat.RFloat;
+        m_TerrainHeightRT.enableRandomWrite = true;
+        m_TerrainHeightRT.Create();
 
         m_PrecipMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_PrecipMaskRT.enableRandomWrite = true;
@@ -76,27 +66,42 @@ public class Erosion : EditorWindow {
         m_FluxRT.enableRandomWrite = true;
         m_FluxRT.Create();
 
+        //sediment
+        m_SedimentRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_SedimentRT.format = RenderTextureFormat.RFloat;
+        m_SedimentRT.enableRandomWrite = true;
+        m_SedimentRT.Create();
+
+        /*
+        //Terrain Normals
+        m_TerrainNormalsRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_TerrainNormalsRT.format = RenderTextureFormat.ARGBFloat;
+        m_TerrainNormalsRT.enableRandomWrite = true;
+        m_TerrainNormalsRT.Create();
+        */
+
         //we did all the things!
         m_Init = true;
     }
 
     void ReleaseData() {
         if (m_Init) {
-            m_InHeightRT.Release();
+            m_TerrainHeightRT.Release();
             m_PrecipMaskRT.Release();
             m_WaterRT.Release();
             m_WaterVelRT.Release();
             m_FluxRT.Release();
+            m_SedimentRT.Release();
+            //m_TerrainNormalsRT.Release();
 
             m_Init = false;
         }
     }
 
     void PrepareTextureData() {
-        if(m_TerrainTile != null && m_InHeightRT != null) {
-            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_InHeightRT);
-        }
-        if(m_PrecipitationMask != null && m_PrecipMaskRT != null) {
+        if(m_Init) {
+            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
+            //Graphics.Blit(m_TerrainTile.terrainData.normalMapTexture, m_TerrainNormalsRT);
             Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
         }
     }
@@ -109,12 +114,14 @@ public class Erosion : EditorWindow {
 
             //set up textures for compute shader
             PrepareTextureData();
-            m_ComputeShader.SetTexture(kidx, "InHeight", m_InHeightRT);
+            m_ComputeShader.SetTexture(kidx, "TerrainHeight", m_TerrainHeightRT);
             m_ComputeShader.SetTexture(kidx, "PrecipMask", m_PrecipMaskRT);
             
             m_ComputeShader.SetTexture(kidx, "Water", m_WaterRT);
             m_ComputeShader.SetTexture(kidx, "WaterVel", m_WaterVelRT);
             m_ComputeShader.SetTexture(kidx, "Flux", m_FluxRT);
+            m_ComputeShader.SetTexture(kidx, "Sediment", m_SedimentRT);
+            //m_ComputeShader.SetTexture(kidx, "TerrainNormals", m_TerrainNormalsRT);
 
             m_ComputeShader.SetFloat("dt", m_DeltaTime);
             m_ComputeShader.SetFloat("precipRate", m_PrecipRate);
@@ -158,6 +165,13 @@ public class Erosion : EditorWindow {
         x += m_texDim[0] + 2; y = dy;
         EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Water Flux");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_FluxRT);
+
+        //bottom row
+        x = 0;
+        y += m_texDim[1] + 30;
+        EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Sediment");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_SedimentRT);
+
 
         this.Repaint();
     }
