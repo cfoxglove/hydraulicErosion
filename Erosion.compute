@@ -10,6 +10,9 @@ RWTexture2D<float>  Sediment;    //suspended sediment concentration (being trans
 float dt;          //the time step for the simulation
 float precipRate;  //the rate at which we will add water via rainfall
 float flowRate;    //how fast water flows
+float sedimentCapacity;
+float sedimentDissolveRate;
+float sedimentDepositRate;
 
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
 
@@ -72,9 +75,9 @@ float2 simulateWaterVelocity(uint2 coord) {
 }
 
 void simulateErosion(uint2 coord) {
-	float kc = 25.0f;   // sediment capacity
-	float ks = 0.001f;    // dissolving constant
-	float kd = 0.002f;    // deposition constant
+	float kc = sedimentCapacity;     // sediment capacity
+	float ks = sedimentDissolveRate;    // dissolving constant
+	float kd = sedimentDepositRate;    // deposition constant
 
 	float3 n = float3(TerrainHeight[uint2(coord.x + 1, coord.y)] - TerrainHeight[uint2(coord.x - 1, coord.y)],
 					  TerrainHeight[uint2(coord.x, coord.y + 1)] - TerrainHeight[uint2(coord.x, coord.y - 1)],
@@ -94,17 +97,17 @@ void simulateErosion(uint2 coord) {
 	if (delta > 0.0f) {
 		//pick up sediment
 		float d = ks * delta;
-		TerrainHeight[coord] = TerrainHeight[coord] - d;
-		Water[coord] = Water[coord] + d;
-		Sediment[coord] = Sediment[coord] + d;
+		TerrainHeight[coord] = saturate(TerrainHeight[coord] - d);
+		Water[coord] = saturate(Water[coord] + d);
+		Sediment[coord] = saturate(Sediment[coord] + d);
 	}
 	else
 	{
 		//deposit sediment
 		float d = kd * delta;
 		TerrainHeight[coord] = TerrainHeight[coord] + d;
-		Water[coord] = Water[coord] - d;
-		Sediment[coord] = Sediment[coord] - d;
+		Water[coord] = saturate(Water[coord] - d);
+		Sediment[coord] = saturate(Sediment[coord] - d);
 	}
 }
 
