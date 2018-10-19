@@ -8,16 +8,14 @@ RWTexture2D<float4> InHeight;
 RWTexture2D<float4> PrecipMask;
 
 // water level
-RWTexture2D<float>  WaterPrev;
+//RWTexture2D<float>  WaterPrev;
 RWTexture2D<float>  Water;
 
 // water velocity
 RWTexture2D<float2> WaterVelPrev;
 RWTexture2D<float2> WaterVel;
 
-//possibly don't need this buffer
-RWTexture2D<float4> FluxIn;
-RWTexture2D<float4> FluxOut;
+RWTexture2D<float4> Flux;
 
 float dt;
 float precipRate;
@@ -57,34 +55,60 @@ float transportWater(uint2 coord, float4 flux) {
 }
 */
 
+float4 simulateFlux(uint2 coord) {
+	float flowSpeed = -0.05f;
+	float cellSize = 1.0f;
+	float g = -9.8f;
+	float h = InHeight[coord].r + Water[coord];//WaterPrev[coord];
+	
+	float fluxCapacitance = (dt * flowSpeed * g) / cellSize;
+
+	//left
+	float4 outFlux;
+	float dh = h - (InHeight[uint2(coord.x - 1, coord.y)].r + Water[uint2(coord.x - 1, coord.y)]);
+	outFlux.x = max(0.0f, Flux[coord].x + dh * fluxCapacitance);
+
+	//right
+	dh = h - (InHeight[uint2(coord.x + 1, coord.y)].r + Water[uint2(coord.x + 1, coord.y)]);
+	outFlux.y = max(0.0f, Flux[coord].y + dh * fluxCapacitance);
+
+	//top
+	dh = h - (InHeight[uint2(coord.x, coord.y + 1)].r + Water[uint2(coord.x, coord.y + 1)]);
+	outFlux.z = max(0.0f, Flux[coord].z + dh * fluxCapacitance);
+
+	//bottom
+	dh = h - (InHeight[uint2(coord.x, coord.y - 1)].r + Water[uint2(coord.x, coord.y - 1)]);
+	outFlux.w = max(0.0f, Flux[coord].w + dh * fluxCapacitance);
+
+	return outFlux;
+}
+
 void simulateWaterVelocity(uint2 coord) {
-	float2 v = WaterVelPrev[coord].xy;
+	float inFlow = Flux[uint2(coord.x - 1, coord.y)].y +
+				   Flux[uint2(coord.x + 1, coord.y)].x +
+				   Flux[uint2(coord.x, coord.y - 1)].z +
+				   Flux[uint2(coord.x, coord.y + 1)].w;
 
-	float4 g = getGradients(coord);
-	float2 accel = float2(g.y - g.x, g.z - g.w); //maybe swap z & w here?
-	v += 100.0f* dt * accel;
+	float outFlow = Flux[coord].x + Flux[coord].y + Flux[coord].z + Flux[coord].w;
 
-	//update current frame's velocity
-	WaterVel[coord].xy = v;
+	float dx = 1.0f; //grid dims?
+	float dy = 1.0f; 
+
+	float dV = dt * (inFlow - outFlow);
+	float oldWater = Water[coord];
+	Water[coord] += dV / (dx * dy);
+	Water[coord] = max(0.0f, Water[coord]);
+
+	//TODO: Update velocities
 }
 
 
 void simulateWater(uint2 coord) {
-	//we are *reading* from the previous frame and *writing* to the current.
-	float waterLevel = WaterPrev[coord];
-
 	//rainfall
-	waterLevel += precipRate * dt * PrecipMask[coord].r;
+	Water[coord] = Water[coord] + precipRate * dt * PrecipMask[coord].r;
 
-	//fluid flow
-	//float4 flux = getFluxed(coord);
+	Flux[coord] = simulateFlux(coord);
 	simulateWaterVelocity(coord);
-	//waterLevel += transportWater(coord, flux);
-
-	float xVel = 0.0f;
-	float yVel = 0.0f;
-
-	Water[coord.xy] = waterLevel;
 }
 
 [numthreads(8,8,1)]
