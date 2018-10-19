@@ -1,0 +1,94 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+RWTexture2D<float4> InHeight;
+RWTexture2D<float4> PrecipMask;
+
+// water level
+RWTexture2D<float>  WaterPrev;
+RWTexture2D<float>  Water;
+
+// water velocity
+RWTexture2D<float2> WaterVelPrev;
+RWTexture2D<float2> WaterVel;
+
+//possibly don't need this buffer
+RWTexture2D<float4> FluxIn;
+RWTexture2D<float4> FluxOut;
+
+float dt;
+float precipRate;
+
+float4 texDim;
+
+//assumes that there is a linear relationship between flux and slope of the heightfield (maybe not true?)
+float4 getGradients(uint2 coord) {
+	float flowRate = 0.1f;
+
+	//compute the gradients
+	float dx, dy;
+
+	//left
+	dy = InHeight[coord].x - InHeight[uint2(coord.x - 1, coord.y)].x;
+	float fluxLeft = flowRate * (dy * texDim[0]);
+
+	//right
+	dy = InHeight[coord].x - InHeight[uint2(coord.x + 1, coord.y)].x;
+	float fluxRight = flowRate * (dy * texDim[0]);
+
+	//top
+	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y + 1)].x;
+	float fluxTop = flowRate * (dy * texDim[1]);
+
+	//bottom
+	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y - 1)].x;
+	float fluxBottom = flowRate * (dy * texDim[1]);
+
+	return float4(fluxLeft, fluxRight, fluxTop, fluxBottom);
+}
+
+/*
+float transportWater(uint2 coord, float4 flux) {
+	float inFlux = flux.x + flux.y + flux.z + flux.w;
+	return 0.01f * inFlux;
+}
+*/
+
+void simulateWaterVelocity(uint2 coord) {
+	float2 v = WaterVelPrev[coord].xy;
+
+	float4 g = getGradients(coord);
+	float2 accel = float2(g.y - g.x, g.z - g.w); //maybe swap z & w here?
+	v += 100.0f* dt * accel;
+
+	//update current frame's velocity
+	WaterVel[coord].xy = v;
+}
+
+
+void simulateWater(uint2 coord) {
+	//we are *reading* from the previous frame and *writing* to the current.
+	float waterLevel = WaterPrev[coord];
+
+	//rainfall
+	waterLevel += precipRate * dt * PrecipMask[coord].r;
+
+	//fluid flow
+	//float4 flux = getFluxed(coord);
+	simulateWaterVelocity(coord);
+	//waterLevel += transportWater(coord, flux);
+
+	float xVel = 0.0f;
+	float yVel = 0.0f;
+
+	Water[coord.xy] = waterLevel;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	simulateWater(id.xy);
+}
