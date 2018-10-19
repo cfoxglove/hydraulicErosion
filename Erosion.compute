@@ -12,32 +12,6 @@ float flowRate;    //how fast water flows
 
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
 
-//assumes that there is a linear relationship between flux and slope of the heightfield (maybe not true?)
-float4 getGradients(uint2 coord) {
-	float flowRate = 0.1f;
-
-	//compute the gradients
-	float dx, dy;
-
-	//left
-	dy = InHeight[coord].x - InHeight[uint2(coord.x - 1, coord.y)];
-	float fluxLeft = flowRate * (dy * texDim[0]);
-
-	//right
-	dy = InHeight[coord].x - InHeight[uint2(coord.x + 1, coord.y)];
-	float fluxRight = flowRate * (dy * texDim[0]);
-
-	//top
-	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y + 1)];
-	float fluxTop = flowRate * (dy * texDim[1]);
-
-	//bottom
-	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y - 1)];
-	float fluxBottom = flowRate * (dy * texDim[1]);
-
-	return float4(fluxLeft, fluxRight, fluxTop, fluxBottom);
-}
-
 float4 simulateFlux(uint2 coord) {
 	float cellSize = 1.0f;
 	float g = -9.8f;
@@ -65,7 +39,7 @@ float4 simulateFlux(uint2 coord) {
 	return outFlux;
 }
 
-void simulateWaterVelocity(uint2 coord) {
+float2 simulateWaterVelocity(uint2 coord) {
 	float inFlow = Flux[uint2(coord.x - 1, coord.y)].y +
 				   Flux[uint2(coord.x + 1, coord.y)].x +
 				   Flux[uint2(coord.x, coord.y - 1)].z +
@@ -81,16 +55,31 @@ void simulateWaterVelocity(uint2 coord) {
 	Water[coord] += dV / (dx * dy);
 	Water[coord] = max(0.0f, Water[coord]);
 
-	//TODO: Update velocities
+	//update velocities
+	float meanWater = 0.5f * (oldWater + Water[coord]);
+	float2 newWaterVel;
+	if (meanWater == 0.0f) {
+		newWaterVel = float2(0.0f, 0.0f);
+	}
+	else {
+		//I'm not confident on this line - should this be 1/meanWater or meanWater???
+		newWaterVel.x = meanWater * 0.5f * (Flux[uint2(coord.x - 1, coord.y)].y - Flux[coord].x - Flux[uint2(coord.x + 1, coord.y)].x + Flux[coord].y) / (dy);// *meanWater);
+		newWaterVel.y = meanWater * 0.5f * (Flux[uint2(coord.x, coord.y - 1)].z - Flux[coord].w - Flux[uint2(coord.x, coord.y + 1)].w + Flux[coord].z) / (dx);// *meanWater);
+	}
+
+	return newWaterVel;
 }
 
+void simulateErosion() {
+
+}
 
 void simulateWater(uint2 coord) {
 	//rainfall
 	Water[coord] = Water[coord] + precipRate * dt * PrecipMask[coord].r;
 
 	Flux[coord] = simulateFlux(coord);
-	simulateWaterVelocity(coord);
+	WaterVel[coord] = simulateWaterVelocity(coord);
 }
 
 [numthreads(8,8,1)]
