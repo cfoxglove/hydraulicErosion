@@ -1,26 +1,16 @@
-﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+﻿#pragma kernel HydraulicErosion
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Result;
-RWTexture2D<float4> InHeight;
-RWTexture2D<float4> PrecipMask;
+RWTexture2D<float>  InHeight;    //terrain heightmap
+RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
+RWTexture2D<float>  Water;       //water height
+RWTexture2D<float2> WaterVel;    //water velocity
+RWTexture2D<float4> Flux;        //current water flux (how much water is transferring to neighboring cells)
 
-// water level
-//RWTexture2D<float>  WaterPrev;
-RWTexture2D<float>  Water;
+float dt;          //the time step for the simulation
+float precipRate;  //the rate at which we will add water via rainfall
+float flowRate;    //how fast water flows
 
-// water velocity
-RWTexture2D<float2> WaterVelPrev;
-RWTexture2D<float2> WaterVel;
-
-RWTexture2D<float4> Flux;
-
-float dt;
-float precipRate;
-
-float4 texDim;
+float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
 
 //assumes that there is a linear relationship between flux and slope of the heightfield (maybe not true?)
 float4 getGradients(uint2 coord) {
@@ -30,54 +20,46 @@ float4 getGradients(uint2 coord) {
 	float dx, dy;
 
 	//left
-	dy = InHeight[coord].x - InHeight[uint2(coord.x - 1, coord.y)].x;
+	dy = InHeight[coord].x - InHeight[uint2(coord.x - 1, coord.y)];
 	float fluxLeft = flowRate * (dy * texDim[0]);
 
 	//right
-	dy = InHeight[coord].x - InHeight[uint2(coord.x + 1, coord.y)].x;
+	dy = InHeight[coord].x - InHeight[uint2(coord.x + 1, coord.y)];
 	float fluxRight = flowRate * (dy * texDim[0]);
 
 	//top
-	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y + 1)].x;
+	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y + 1)];
 	float fluxTop = flowRate * (dy * texDim[1]);
 
 	//bottom
-	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y - 1)].x;
+	dy = InHeight[coord].x - InHeight[uint2(coord.x, coord.y - 1)];
 	float fluxBottom = flowRate * (dy * texDim[1]);
 
 	return float4(fluxLeft, fluxRight, fluxTop, fluxBottom);
 }
 
-/*
-float transportWater(uint2 coord, float4 flux) {
-	float inFlux = flux.x + flux.y + flux.z + flux.w;
-	return 0.01f * inFlux;
-}
-*/
-
 float4 simulateFlux(uint2 coord) {
-	float flowSpeed = -0.05f;
 	float cellSize = 1.0f;
 	float g = -9.8f;
-	float h = InHeight[coord].r + Water[coord];//WaterPrev[coord];
+	float h = InHeight[coord] + Water[coord];//WaterPrev[coord];
 	
-	float fluxCapacitance = (dt * flowSpeed * g) / cellSize;
+	float fluxCapacitance = (dt * flowRate * g) / cellSize;
 
 	//left
 	float4 outFlux;
-	float dh = h - (InHeight[uint2(coord.x - 1, coord.y)].r + Water[uint2(coord.x - 1, coord.y)]);
+	float dh = h - (InHeight[uint2(coord.x - 1, coord.y)] + Water[uint2(coord.x - 1, coord.y)]);
 	outFlux.x = max(0.0f, Flux[coord].x + dh * fluxCapacitance);
 
 	//right
-	dh = h - (InHeight[uint2(coord.x + 1, coord.y)].r + Water[uint2(coord.x + 1, coord.y)]);
+	dh = h - (InHeight[uint2(coord.x + 1, coord.y)] + Water[uint2(coord.x + 1, coord.y)]);
 	outFlux.y = max(0.0f, Flux[coord].y + dh * fluxCapacitance);
 
 	//top
-	dh = h - (InHeight[uint2(coord.x, coord.y + 1)].r + Water[uint2(coord.x, coord.y + 1)]);
+	dh = h - (InHeight[uint2(coord.x, coord.y + 1)] + Water[uint2(coord.x, coord.y + 1)]);
 	outFlux.z = max(0.0f, Flux[coord].z + dh * fluxCapacitance);
 
 	//bottom
-	dh = h - (InHeight[uint2(coord.x, coord.y - 1)].r + Water[uint2(coord.x, coord.y - 1)]);
+	dh = h - (InHeight[uint2(coord.x, coord.y - 1)] + Water[uint2(coord.x, coord.y - 1)]);
 	outFlux.w = max(0.0f, Flux[coord].w + dh * fluxCapacitance);
 
 	return outFlux;
@@ -112,7 +94,7 @@ void simulateWater(uint2 coord) {
 }
 
 [numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+void HydraulicErosion (uint3 id : SV_DispatchThreadID)
 {
 	simulateWater(id.xy);
 }
