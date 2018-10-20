@@ -12,10 +12,12 @@ public class Erosion : EditorWindow {
     private int m_NumIterations = 300;
     private float m_DeltaTime = 0.01f;
     private float m_PrecipRate = 0.1f;
-    private float m_FlowRate = -0.03f;
+    private float m_FlowRate = -0.07f;
     private float m_SedimentCapacity = 50.0f;
     private float m_SedimentDissolveRate = 0.01f;
     private float m_SedimentDepositRate = 0.01f;
+    private float m_EvaporationRate = 0.0001f;
+    private float m_SmoothingFactor = 0.05f;
 
     private int[] m_texDim = { 256, 256 };
     
@@ -127,6 +129,8 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetFloat("sedimentCapacity", m_SedimentCapacity);
             m_ComputeShader.SetFloat("sedimentDissolveRate", m_SedimentDissolveRate);
             m_ComputeShader.SetFloat("sedimentDepositRate", m_SedimentDepositRate);
+            m_ComputeShader.SetFloat("smoothingFactor", m_SmoothingFactor);
+            m_ComputeShader.SetFloat("evaporationRate", m_EvaporationRate);
 
             m_ComputeShader.SetVector("texDim", new Vector4(m_texDim[0], m_texDim[1], 0.0f, 0.0f));
 
@@ -153,6 +157,8 @@ public class Erosion : EditorWindow {
         m_SedimentCapacity = EditorGUILayout.FloatField("Sediment Capacity", m_SedimentCapacity);
         m_SedimentDissolveRate = EditorGUILayout.FloatField("Sediment Dissolve Rate", m_SedimentDissolveRate);
         m_SedimentDepositRate = EditorGUILayout.FloatField("Sediment Deposit Rate", m_SedimentDepositRate);
+        m_EvaporationRate = EditorGUILayout.FloatField("Evaporation Rate", m_EvaporationRate);
+        m_SmoothingFactor = EditorGUILayout.FloatField("Smoothing Factor", m_SmoothingFactor);
 
         if (GUILayout.Button("Reset")) {
             ReleaseData();

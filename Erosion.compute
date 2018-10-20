@@ -13,8 +13,21 @@ float flowRate;    //how fast water flows
 float sedimentCapacity;
 float sedimentDissolveRate;
 float sedimentDepositRate;
+float evaporationRate;
+float smoothingFactor;
 
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
+
+void smoothTerrain(uint2 coord) {
+	float h = TerrainHeight[coord];
+
+	float hl = TerrainHeight[uint2(coord.x - 1, coord.y)];
+	float hr = TerrainHeight[uint2(coord.x + 1, coord.y)];
+	float ht = TerrainHeight[uint2(coord.x, coord.y + 1)];
+	float hb = TerrainHeight[uint2(coord.x, coord.y - 1)];
+
+	TerrainHeight[coord] = lerp(h, (hl + hr + ht + hb + h) / 5.0f, smoothingFactor);
+}
 
 float4 simulateFlux(uint2 coord) {
 	float cellSize = 1.0f;
@@ -75,9 +88,9 @@ float2 simulateWaterVelocity(uint2 coord) {
 }
 
 void simulateErosion(uint2 coord) {
-	float kc = sedimentCapacity;     // sediment capacity
+	float kc = sedimentCapacity;        // sediment capacity
 	float ks = sedimentDissolveRate;    // dissolving constant
-	float kd = sedimentDepositRate;    // deposition constant
+	float kd = sedimentDepositRate;     // deposition constant
 
 	float3 n = float3(TerrainHeight[uint2(coord.x + 1, coord.y)] - TerrainHeight[uint2(coord.x - 1, coord.y)],
 					  TerrainHeight[uint2(coord.x, coord.y + 1)] - TerrainHeight[uint2(coord.x, coord.y - 1)],
@@ -126,12 +139,13 @@ void simulateSedimentTransport(uint2 coord) {
 
 void simulateWater(uint2 coord) {
 	//rainfall
-	Water[coord] = Water[coord] + precipRate * dt * PrecipMask[coord].r;
+	Water[coord] = Water[coord] + precipRate * dt;// *PrecipMask[coord].r;
 
 	Flux[coord] = simulateFlux(coord);
 	WaterVel[coord] = simulateWaterVelocity(coord);
 
 	//evaporation
+	Water[coord] = max(Water[coord] * (1.0f - evaporationRate), 0.0f);
 }
 
 [numthreads(8,8,1)]
@@ -140,4 +154,7 @@ void HydraulicErosion (uint3 id : SV_DispatchThreadID)
 	simulateWater(id.xy);
 	simulateErosion(id.xy);
 	simulateSedimentTransport(id.xy);
+
+	smoothTerrain(id.xy);
+	//not sure this is safe to do here...
 }
