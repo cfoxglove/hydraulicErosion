@@ -17,7 +17,7 @@ public class Erosion : EditorWindow {
     private float m_SedimentDissolveRate = 0.01f;
     private float m_SedimentDepositRate = 0.01f;
 
-    private int[] m_texDim = { 512, 512 };
+    private int[] m_texDim = { 256, 256 };
     
     private RenderTexture m_TerrainHeightRT;
     private RenderTexture m_PrecipMaskRT;
@@ -138,7 +138,7 @@ public class Erosion : EditorWindow {
             Graphics.Blit(m_TerrainHeightRT, m_TerrainTile.terrainData.heightmapTexture);
             //Graphics.Blit(m_SedimentRT, m_TerrainTile.terrainData.heightmapTexture);
             //m_TerrainTile.terrain.terrainData.UpdateDirtyRegion(terrainTile.clippedLocal.x, terrainTile.clippedLocal.y, terrainTile.clippedLocal.width, terrainTile.clippedLocal.height, !terrainTile.terrain.drawInstanced);
-            m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, (int)m_TerrainTile.terrainData.size.x, (int)m_TerrainTile.terrainData.size.y, true);
+            //m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, (int)m_TerrainTile.terrainData.size.x, (int)m_TerrainTile.terrainData.size.y, true);
         }
     }
 
