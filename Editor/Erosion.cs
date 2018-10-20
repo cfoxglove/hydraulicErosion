@@ -173,20 +173,20 @@ public class Erosion : EditorWindow {
         int x = 0;
         int y = dy;
 
-        EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Water Level");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_WaterRT);
+        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Level");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterRT);
         x += m_texDim[0] + 2; y = dy;
-        EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Water Velocity");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_WaterVelRT);
+        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Velocity");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterVelRT);
         x += m_texDim[0] + 2; y = dy;
-        EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Water Flux");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_FluxRT);
+        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Flux");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_FluxRT);
 
         //bottom row
         x = 0;
         y += m_texDim[1] + 30;
-        EditorGUI.LabelField(new Rect(x, y - 20, m_texDim[0], m_texDim[1]), "Sediment");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, m_texDim[0], m_texDim[1]), m_SedimentRT);
+        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
 
         this.Repaint();
     }
