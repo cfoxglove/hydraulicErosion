@@ -1,4 +1,12 @@
-﻿RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
+﻿//
+// conventions
+//     left = coord.x - 1
+//     right = coord.x + 1
+//     top = coord.y + 1
+//     bottom = coord.y - 1
+//
+
+RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
 
 RWTexture2D<float>  TerrainHeight;      //terrain heightmap
 RWTexture2D<float>  TerrainHeightPrev;  //previous frame
@@ -146,12 +154,17 @@ void simulateErosion(uint2 coord) {
 	float ks = sedimentDissolveRate;    // dissolving constant
 	float kd = sedimentDepositRate;     // deposition constant
 
-	float waterLevel = Water[coord]; //use Water, not WaterPrev here because we have just simulated water flow
+	float waterLevel = Water[coord];    //use Water, not WaterPrev here because we have just simulated water flow
 	float sediment = SedimentPrev[coord];
 	float terrainHeight = TerrainHeightPrev[coord];
 
-	float3 n = float3(TerrainHeightPrev[uint2(coord.x + 1, coord.y)] - TerrainHeightPrev[uint2(coord.x - 1, coord.y)],
-					  TerrainHeightPrev[uint2(coord.x, coord.y + 1)] - TerrainHeightPrev[uint2(coord.x, coord.y - 1)],
+	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
+	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
+	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
+	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
+
+	float3 n = float3(TerrainHeightPrev[uint2(ridx, coord.y)] - TerrainHeightPrev[uint2(lidx, coord.y)],
+					  TerrainHeightPrev[uint2(coord.x, tidx)] - TerrainHeightPrev[uint2(coord.x, bidx)],
 					  2.0f);
 	n = normalize(n);
 	float cosa = dot(n, float3(0.0f, 0.0f, 1.0f));

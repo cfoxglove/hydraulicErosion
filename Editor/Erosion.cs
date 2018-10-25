@@ -236,11 +236,11 @@ public class Erosion : EditorWindow {
 
 
             for (int i = 0; i < m_NumHydraulicIterations; i++) {
-                float rainPos = 100.0f * (float)i / m_NumHydraulicIterations;
+                float rainScale = Mathf.Lerp(100.0f, 500.0f, Random.value);
+                float rainPos = rainScale * Random.value;
                 m_ComputeShader.SetFloat("rainPosition", rainPos);
                 m_ComputeShader.Dispatch(waterFlowKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
                 m_ComputeShader.Dispatch(hydraulicKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
-
                 
                 //curr -> prev (and we don't care what curr is after this because we only write to it)
                 Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
@@ -249,10 +249,10 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_WaterVelRT, m_WaterVelPrevRT);
                 Graphics.Blit(m_FluxRT, m_FluxPrevRT);
 
-                /*for (int j = 0; j < m_NumThermalIterations; j++) {
+                for (int j = 0; j < m_NumThermalIterations; j++) {
                     m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
                     SwapBuffers(m_TerrainHeightRT, m_TerrainHeightPrevRT);
-                }*/
+                }
             }
 
             //Blit the output back to the terrain heightmap
@@ -295,16 +295,16 @@ public class Erosion : EditorWindow {
 
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Level");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterRT);
-        x += m_texDim[0] + 2; y = dy;
+        x += 256 + 2; y = dy;
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Velocity");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterVelRT);
-        x += m_texDim[0] + 2; y = dy;
+        x += 256 + 2; y = dy;
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Flux");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_FluxRT);
 
         //bottom row
         x = 0;
-        y += m_texDim[1] + 30;
+        y += 256 + 30;
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
 
