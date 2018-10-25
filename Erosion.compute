@@ -1,13 +1,19 @@
-﻿#pragma kernel HydraulicErosion
+﻿RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
 
 RWTexture2D<float>  TerrainHeight;      //terrain heightmap
 RWTexture2D<float>  TerrainHeightPrev;  //previous frame
 
-RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
 RWTexture2D<float>  Water;       //water height
+RWTexture2D<float>  WaterPrev;   //water height prev
+
 RWTexture2D<float2> WaterVel;    //water velocity
+RWTexture2D<float2> WaterVelPrev; //water vel prev
+
 RWTexture2D<float4> Flux;        //current water flux (how much water is transferring to neighboring cells)
+RWTexture2D<float4> FluxPrev;    //flux
+
 RWTexture2D<float>  Sediment;    //suspended sediment concentration (being transported by the water)
+RWTexture2D<float>  SedimentPrev;
 
 float dt;          //the time step for the simulation
 float precipRate;  //the rate at which we will add water via rainfall
@@ -22,26 +28,26 @@ float4 texDim;     //the dimensions of all of our textures (they must all be the
 float4 simulateFlux(uint2 coord) {
 	float cellSize = 1.0f;
 	float g = -9.8f;
-	float h = TerrainHeight[coord] + Water[coord];//WaterPrev[coord];
+	float h = TerrainHeightPrev[coord] + WaterPrev[coord];//WaterPrev[coord];
 	
 	float fluxCapacitance = (dt * flowRate * g) / cellSize;
 
 	//left
 	float4 outFlux;
-	float dh = h - (TerrainHeight[uint2(coord.x - 1, coord.y)] + Water[uint2(coord.x - 1, coord.y)]);
-	outFlux.x = max(0.0f, Flux[coord].x + dh * fluxCapacitance);
+	float dh = h - (TerrainHeightPrev[uint2(coord.x - 1, coord.y)] + WaterPrev[uint2(coord.x - 1, coord.y)]);
+	outFlux.x = max(0.0f, FluxPrev[coord].x + dh * fluxCapacitance);
 
 	//right
-	dh = h - (TerrainHeight[uint2(coord.x + 1, coord.y)] + Water[uint2(coord.x + 1, coord.y)]);
-	outFlux.y = max(0.0f, Flux[coord].y + dh * fluxCapacitance);
+	dh = h - (TerrainHeightPrev[uint2(coord.x + 1, coord.y)] + WaterPrev[uint2(coord.x + 1, coord.y)]);
+	outFlux.y = max(0.0f, FluxPrev[coord].y + dh * fluxCapacitance);
 
 	//top
-	dh = h - (TerrainHeight[uint2(coord.x, coord.y + 1)] + Water[uint2(coord.x, coord.y + 1)]);
-	outFlux.z = max(0.0f, Flux[coord].z + dh * fluxCapacitance);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, coord.y + 1)] + WaterPrev[uint2(coord.x, coord.y + 1)]);
+	outFlux.z = max(0.0f, FluxPrev[coord].z + dh * fluxCapacitance);
 
 	//bottom
-	dh = h - (TerrainHeight[uint2(coord.x, coord.y - 1)] + Water[uint2(coord.x, coord.y - 1)]);
-	outFlux.w = max(0.0f, Flux[coord].w + dh * fluxCapacitance);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, coord.y - 1)] + WaterPrev[uint2(coord.x, coord.y - 1)]);
+	outFlux.w = max(0.0f, FluxPrev[coord].w + dh * fluxCapacitance);
 
 	return outFlux;
 }
@@ -57,6 +63,7 @@ float2 simulateWaterVelocity(uint2 coord) {
 	float dx = 1.0f; //grid dims?
 	float dy = 1.0f; 
 
+	//??? why are we updating water here???
 	float dV = dt * (inFlow - outFlow);
 	float oldWater = Water[coord];
 	Water[coord] += dV / (dx * dy);
@@ -77,44 +84,107 @@ float2 simulateWaterVelocity(uint2 coord) {
 	return newWaterVel;
 }
 
+float hash(float n)
+{
+	return frac(sin(n)*43758.5453f);
+}
+
+float noise(float3 x)
+{
+	float3 p = floor(x);
+	float3 f = frac(x);
+
+	f = f * f * (3.0 - 2.0 * f);
+
+	float n = p.x + p.y * 57.0 + 113.0 * p.z;
+
+	float res = lerp(lerp(lerp(hash(n + 0.0), hash(n + 1.0), f.x),
+		lerp(hash(n + 57.0), hash(n + 58.0), f.x), f.y),
+		lerp(lerp(hash(n + 113.0), hash(n + 114.0), f.x),
+			lerp(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+	return res;
+}
+
+float fbm(float3 p)
+{
+	float f;
+	f = 0.5000*noise(p); p = p * 2.02;
+	f += 0.2500*noise(p); p = p * 2.03;
+	f += 0.1250*noise(p);
+	return f;
+}
+
+float rainPosition;
+void simulateWater(uint2 coord) {
+	//rainfall
+	float rainScale = 0.06f;
+	float3 rainPos = float3(rainScale * (float)coord.x, rainScale * (float)coord.y, rainPosition);
+	float rainfall = precipRate * dt * fbm(rainPos);// *PrecipMask[coord].r;
+
+	float evaporated = evaporationRate * dt;
+
+	Flux[coord] = simulateFlux(coord);
+	WaterVel[coord] = simulateWaterVelocity(coord);
+
+	Water[coord] = max(WaterPrev[coord] + rainfall - evaporated, 0.0f);
+}
+
+#pragma kernel SimulateWaterFlow
+
+[numthreads(8,8,1)]
+void SimulateWaterFlow(uint3 id : SV_DispatchThreadID)
+{
+	simulateWater(id.xy);
+}
+
+
+//
+// Hydraulic Erosion
+//
 void simulateErosion(uint2 coord) {
 	float kc = sedimentCapacity;        // sediment capacity
 	float ks = sedimentDissolveRate;    // dissolving constant
 	float kd = sedimentDepositRate;     // deposition constant
 
-	float3 n = float3(TerrainHeight[uint2(coord.x + 1, coord.y)] - TerrainHeight[uint2(coord.x - 1, coord.y)],
-					  TerrainHeight[uint2(coord.x, coord.y + 1)] - TerrainHeight[uint2(coord.x, coord.y - 1)],
+	float waterLevel = Water[coord]; //use Water, not WaterPrev here because we have just simulated water flow
+	float sediment = SedimentPrev[coord];
+	float terrainHeight = TerrainHeightPrev[coord];
+
+	float3 n = float3(TerrainHeightPrev[uint2(coord.x + 1, coord.y)] - TerrainHeightPrev[uint2(coord.x - 1, coord.y)],
+					  TerrainHeightPrev[uint2(coord.x, coord.y + 1)] - TerrainHeightPrev[uint2(coord.x, coord.y - 1)],
 					  2.0f);
 	n = normalize(n);
 	float cosa = dot(n, float3(0.0f, 0.0f, 1.0f));
 	float sinAlpha = max(0.1f, sin(acos(cosa)));
 
+	//use watervel here because we have just computed it for this frame in the previous stage
 	float flowSpeed = sqrt(WaterVel[coord].x * WaterVel[coord].x + WaterVel[coord].y * WaterVel[coord].y);
 
 	//local sediment capacity of the flow
 	float cap = kc * flowSpeed * sinAlpha * (min(Water[coord], 0.01f) / 0.01f);
-	float delta = (cap - Sediment[coord]);
+	float delta = (cap - SedimentPrev[coord]);
 
 	float fctr = min(Water[coord], 0.01f) / 0.01f;
 
 	if (delta > 0.0f) {
 		//pick up sediment
 		float d = ks * delta;
-		TerrainHeight[coord] = saturate(TerrainHeight[coord] - d);
-		Water[coord] = saturate(Water[coord] + d);
-		Sediment[coord] = saturate(Sediment[coord] + d);
+		TerrainHeight[coord] = saturate(terrainHeight - d);
+		Water[coord] = saturate(waterLevel + d);
+		Sediment[coord] = saturate(sediment + d);
 	}
 	else
 	{
 		//deposit sediment
 		float d = kd * delta;
-		TerrainHeight[coord] = TerrainHeight[coord] + d;
-		Water[coord] = saturate(Water[coord] - d);
-		Sediment[coord] = saturate(Sediment[coord] - d);
+		TerrainHeight[coord] = terrainHeight + d;
+		Water[coord] = saturate(waterLevel - d);
+		Sediment[coord] = saturate(sediment - d);
 	}
 }
 
 void simulateSedimentTransport(uint2 coord) {
+	//use WaterVel not WaterVelPrev because we calculated it in the previous stage
 	float fromX = (float)coord.x - WaterVel[coord].x;
 	float fromY = (float)coord.y - WaterVel[coord].y;
 
@@ -124,40 +194,22 @@ void simulateSedimentTransport(uint2 coord) {
 	float fx = fromX - (float)cell0.x;
 	float fy = fromY - (float)cell0.y;
 
-	Sediment[coord] = lerp(lerp(Sediment[cell0], Sediment[uint2(cell1.x, cell0.y)], fx), lerp(Sediment[uint2(cell0.x, cell1.y)], Sediment[cell1], fx), fy);
+	Sediment[coord] = lerp(lerp(SedimentPrev[cell0], SedimentPrev[uint2(cell1.x, cell0.y)], fx), lerp(SedimentPrev[uint2(cell0.x, cell1.y)], SedimentPrev[cell1], fx), fy);
 }
 
-void simulateWater(uint2 coord) {
-	//rainfall
-	Water[coord] = Water[coord] + precipRate * dt;// *PrecipMask[coord].r;
-
-	Flux[coord] = simulateFlux(coord);
-	WaterVel[coord] = simulateWaterVelocity(coord);
-
-	//evaporation
-	Water[coord] = max(Water[coord] * (1.0f - evaporationRate), 0.0f);
-}
+#pragma kernel HydraulicErosion
 
 [numthreads(8,8,1)]
 void HydraulicErosion (uint3 id : SV_DispatchThreadID)
-{
-	/*
-	simulateWater(id.xy);
+{	
 	simulateErosion(id.xy);
 	simulateSedimentTransport(id.xy);
-	*/
-
-	//simulateThermalErosion(id.xy);
 }
 
 
 //
 // Thermal Erosion
 //
-#pragma kernel ThermalErosion
-
-//RWTexture2D<float>  TerrainHeight;    //terrain heightmap
-
 float angleOfRepose; //actually tan(theta)
 int numThermalIterations;
 
@@ -189,6 +241,8 @@ void simulateThermalErosion(uint2 coord) {
 		TerrainHeight[coord] -= a * dt * dhb / 8.0f;
 	}
 }
+
+#pragma kernel ThermalErosion
 
 [numthreads(8, 8, 1)]
 void ThermalErosion(uint3 id : SV_DispatchThreadID)

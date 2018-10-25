@@ -25,15 +25,23 @@ public class Erosion : EditorWindow {
     private float m_AngleOfRepose = 35.0f; //in degrees
 
     private int[] m_texDim = { 256, 256 };
-    
+
+    private RenderTexture m_PrecipMaskRT;
+
     private RenderTexture m_TerrainHeightRT;
     private RenderTexture m_TerrainHeightPrevRT;
 
-    private RenderTexture m_PrecipMaskRT;
     private RenderTexture m_WaterRT;
+    private RenderTexture m_WaterPrevRT;
+
     private RenderTexture m_WaterVelRT;
+    private RenderTexture m_WaterVelPrevRT;
+
     private RenderTexture m_FluxRT;
+    private RenderTexture m_FluxPrevRT;
+
     private RenderTexture m_SedimentRT;
+    private RenderTexture m_SedimentPrevRT;
     //private RenderTexture m_TerrainNormalsRT;
 
     // Add menu named "My Window" to the Window menu
@@ -49,21 +57,21 @@ public class Erosion : EditorWindow {
         m_texDim[0] = m_texDim[1] = m_TerrainTile.terrainData.heightmapResolution;
         Debug.Log("Initializing textures at " + m_texDim[0]);
 
+        m_PrecipMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_PrecipMaskRT.enableRandomWrite = true;
+        m_PrecipMaskRT.Create();
+
         m_TerrainHeightRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
-        //m_TerrainHeightRT.format = RenderTextureFormat.RFloat;
-        m_TerrainHeightRT.format = RenderTextureFormat.RHalf;
+        m_TerrainHeightRT.format = RenderTextureFormat.RFloat;
+        //m_TerrainHeightRT.format = RenderTextureFormat.RHalf;
         m_TerrainHeightRT.enableRandomWrite = true;
         m_TerrainHeightRT.Create();
 
         m_TerrainHeightPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
-        //m_TerrainHeightPrevRT.format = RenderTextureFormat.RFloat;
-        m_TerrainHeightPrevRT.format = RenderTextureFormat.RHalf;
+        m_TerrainHeightPrevRT.format = RenderTextureFormat.RFloat;
+        //m_TerrainHeightPrevRT.format = RenderTextureFormat.RHalf;
         m_TerrainHeightPrevRT.enableRandomWrite = true;
         m_TerrainHeightPrevRT.Create();
-
-        m_PrecipMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
-        m_PrecipMaskRT.enableRandomWrite = true;
-        m_PrecipMaskRT.Create();
 
         //Water level
         m_WaterRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
@@ -71,11 +79,22 @@ public class Erosion : EditorWindow {
         m_WaterRT.enableRandomWrite = true;
         m_WaterRT.Create();
 
+        m_WaterPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_WaterPrevRT.format = RenderTextureFormat.RFloat;
+        m_WaterPrevRT.enableRandomWrite = true;
+        m_WaterPrevRT.Create();
+
         //water velocity
         m_WaterVelRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_WaterVelRT.format = RenderTextureFormat.RGFloat;
         m_WaterVelRT.enableRandomWrite = true;
         m_WaterVelRT.Create();
+
+        m_WaterVelPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_WaterVelPrevRT.format = RenderTextureFormat.RGFloat;
+        m_WaterVelPrevRT.enableRandomWrite = true;
+        m_WaterVelPrevRT.Create();
+
 
         //flux
         m_FluxRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
@@ -83,11 +102,21 @@ public class Erosion : EditorWindow {
         m_FluxRT.enableRandomWrite = true;
         m_FluxRT.Create();
 
+        m_FluxPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_FluxPrevRT.format = RenderTextureFormat.ARGBFloat;
+        m_FluxPrevRT.enableRandomWrite = true;
+        m_FluxPrevRT.Create();
+
         //sediment
         m_SedimentRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_SedimentRT.format = RenderTextureFormat.RFloat;
         m_SedimentRT.enableRandomWrite = true;
         m_SedimentRT.Create();
+
+        m_SedimentPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_SedimentPrevRT.format = RenderTextureFormat.RFloat;
+        m_SedimentPrevRT.enableRandomWrite = true;
+        m_SedimentPrevRT.Create();
 
         /*
         //Terrain Normals
@@ -103,13 +132,23 @@ public class Erosion : EditorWindow {
 
     void ReleaseData() {
         if (m_Init) {
+            m_PrecipMaskRT.Release();
+
             m_TerrainHeightRT.Release();
             m_TerrainHeightPrevRT.Release();
-            m_PrecipMaskRT.Release();
+
             m_WaterRT.Release();
+            m_WaterPrevRT.Release();
+
             m_WaterVelRT.Release();
+            m_WaterVelPrevRT.Release();
+
             m_FluxRT.Release();
+            m_FluxPrevRT.Release();
+
             m_SedimentRT.Release();
+            m_SedimentPrevRT.Release();
+
             //m_TerrainNormalsRT.Release();
 
             m_Init = false;
@@ -119,46 +158,44 @@ public class Erosion : EditorWindow {
     void PrepareTextureData() {
         if(m_Init) {
             Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
+            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
             //Graphics.Blit(m_TerrainTile.terrainData.normalMapTexture, m_TerrainNormalsRT);
             Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
         }
     }
 
-    void SwapBuffers() {
-        /*RenderTexture tmp = m_TerrainHeightRT;
-        m_TerrainHeightRT = m_TerrainHeightPrevRT;
-        m_TerrainHeightPrevRT = tmp;
+    void SwapBuffers(RenderTexture a, RenderTexture b) {
+        /*RenderTexture tmp = a;
+        a = b;
+        b = tmp;
         */
         
-        RenderTexture tmp = RenderTexture.GetTemporary(m_texDim[0], m_texDim[1]);
+        
+        RenderTexture tmp = RenderTexture.GetTemporary(m_texDim[0], m_texDim[1], 0, a.format);
 
-        Graphics.Blit(m_TerrainHeightPrevRT, tmp);
-        Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
-        Graphics.Blit(tmp, m_TerrainHeightRT);
+        Graphics.Blit(a, tmp);
+        Graphics.Blit(b, a); //possibly only need to do the first blit, since we don't care about previous data
+        Graphics.Blit(tmp, b);
+        
 
         RenderTexture.ReleaseTemporary(tmp);
+        
     }
 
     void Simulate() {
         if (m_ComputeShader != null) {
             InitData();
+            PrepareTextureData();
 
             int[] numWorkGroups = { 8, 8, 1 };
             int hydraulicKernelIdx = m_ComputeShader.FindKernel("HydraulicErosion");
             int thermalKernelIdx = m_ComputeShader.FindKernel("ThermalErosion");
+            int waterFlowKernelIdx = m_ComputeShader.FindKernel("SimulateWaterFlow");
 
-            //set up textures for compute shader
-            PrepareTextureData();
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeight", m_TerrainHeightRT);
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+            float m = Mathf.Tan(m_AngleOfRepose * Mathf.Deg2Rad);
 
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "PrecipMask", m_PrecipMaskRT);
-            
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Water", m_WaterRT);
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "WaterVel", m_WaterVelRT);
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Flux", m_FluxRT);
-            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Sediment", m_SedimentRT);
-
+            //global parameters
+            m_ComputeShader.SetVector("texDim", new Vector4(m_texDim[0], m_texDim[1], 0.0f, 0.0f));
             m_ComputeShader.SetFloat("dt", m_DeltaTime);
             m_ComputeShader.SetFloat("precipRate", m_PrecipRate);
             m_ComputeShader.SetFloat("flowRate", m_FlowRate);
@@ -166,33 +203,57 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetFloat("sedimentDissolveRate", m_SedimentDissolveRate);
             m_ComputeShader.SetFloat("sedimentDepositRate", m_SedimentDepositRate);
             m_ComputeShader.SetFloat("evaporationRate", m_EvaporationRate);
-
-            m_ComputeShader.SetVector("texDim", new Vector4(m_texDim[0], m_texDim[1], 0.0f, 0.0f));
-
-            float m = Mathf.Tan(m_AngleOfRepose * Mathf.Deg2Rad);
-            Debug.Log("angle of repose slope: " + m);
-
-            // Set parameters for the thermal erosion shader
             m_ComputeShader.SetInt("numThermalIterations", m_NumThermalIterations);
             m_ComputeShader.SetFloat("angleOfRepose", m);
+
+            //water flow simulation
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "PrecipMask", m_PrecipMaskRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "Water", m_WaterRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "WaterPrev", m_WaterPrevRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "WaterVel", m_WaterVelRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "WaterVelPrev", m_WaterVelPrevRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "Flux", m_FluxRT);
+            m_ComputeShader.SetTexture(waterFlowKernelIdx, "FluxPrev", m_FluxPrevRT);
+
+            //set up textures for sediment transport + erosion
+            //presumably we've already calculated our water levels and velocities in the
+            //previous step, and no longer need their previous values
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeight", m_TerrainHeightRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Water", m_WaterRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "WaterPrev", m_WaterPrevRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "WaterVel", m_WaterVelRT);
+            //m_ComputeShader.SetTexture(hydraulicKernelIdx, "WaterVelPrev", m_WaterVelPrevRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Flux", m_FluxRT);
+            //m_ComputeShader.SetTexture(hydraulicKernelIdx, "FluxPrev", m_FluxPrevRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "Sediment", m_SedimentRT);
+            m_ComputeShader.SetTexture(hydraulicKernelIdx, "SedimentPrev", m_SedimentPrevRT);
+
+            //thermal erosion textures
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeight", m_TerrainHeightRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
 
-            //should probably do these loops inside the compute shader?
-            /*for (int i = 0; i < m_NumHydraulicIterations; i++) {
-                m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeight", m_TerrainHeightRT);
-                m_ComputeShader.SetTexture(hydraulicKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+
+            for (int i = 0; i < m_NumHydraulicIterations; i++) {
+                float rainPos = 100.0f * (float)i / m_NumHydraulicIterations;
+                m_ComputeShader.SetFloat("rainPosition", rainPos);
+                m_ComputeShader.Dispatch(waterFlowKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
                 m_ComputeShader.Dispatch(hydraulicKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
 
-                SwapBuffers();*/
-            for (int j = 0; j < m_NumThermalIterations; j++) {
+                
+                //curr -> prev (and we don't care what curr is after this because we only write to it)
+                Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+                Graphics.Blit(m_SedimentRT, m_SedimentPrevRT);
+                Graphics.Blit(m_WaterRT, m_WaterPrevRT);
+                Graphics.Blit(m_WaterVelRT, m_WaterVelPrevRT);
+                Graphics.Blit(m_FluxRT, m_FluxPrevRT);
 
-                    //m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeight", m_TerrainHeightRT);
-                    //m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+                /*for (int j = 0; j < m_NumThermalIterations; j++) {
                     m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
-                    SwapBuffers();
-                }
-            //}
+                    SwapBuffers(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+                }*/
+            }
 
             //Blit the output back to the terrain heightmap
             Graphics.Blit(m_TerrainHeightRT, m_TerrainTile.terrainData.heightmapTexture);
