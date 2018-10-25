@@ -33,38 +33,49 @@ float evaporationRate;
 
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
 
+//use WaterPrev here because we have not yet calculated this frame's buffer
 float4 simulateFlux(uint2 coord) {
 	float cellSize = 1.0f;
 	float g = -9.8f;
-	float h = TerrainHeightPrev[coord] + WaterPrev[coord];//WaterPrev[coord];
+	float h = TerrainHeightPrev[coord] + WaterPrev[coord];
+
+	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
+	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
+	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
+	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
 	
 	float fluxCapacitance = (dt * flowRate * g) / cellSize;
 
 	//left
 	float4 outFlux;
-	float dh = h - (TerrainHeightPrev[uint2(coord.x - 1, coord.y)] + WaterPrev[uint2(coord.x - 1, coord.y)]);
+	float dh = h - (TerrainHeightPrev[uint2(lidx, coord.y)] + WaterPrev[uint2(lidx, coord.y)]);
 	outFlux.x = max(0.0f, FluxPrev[coord].x + dh * fluxCapacitance);
 
 	//right
-	dh = h - (TerrainHeightPrev[uint2(coord.x + 1, coord.y)] + WaterPrev[uint2(coord.x + 1, coord.y)]);
+	dh = h - (TerrainHeightPrev[uint2(ridx, coord.y)] + WaterPrev[uint2(ridx, coord.y)]);
 	outFlux.y = max(0.0f, FluxPrev[coord].y + dh * fluxCapacitance);
 
 	//top
-	dh = h - (TerrainHeightPrev[uint2(coord.x, coord.y + 1)] + WaterPrev[uint2(coord.x, coord.y + 1)]);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, tidx)] + WaterPrev[uint2(coord.x, tidx)]);
 	outFlux.z = max(0.0f, FluxPrev[coord].z + dh * fluxCapacitance);
 
 	//bottom
-	dh = h - (TerrainHeightPrev[uint2(coord.x, coord.y - 1)] + WaterPrev[uint2(coord.x, coord.y - 1)]);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, bidx)] + WaterPrev[uint2(coord.x, bidx)]);
 	outFlux.w = max(0.0f, FluxPrev[coord].w + dh * fluxCapacitance);
 
 	return outFlux;
 }
 
 float2 simulateWaterVelocity(uint2 coord) {
-	float inFlow = Flux[uint2(coord.x - 1, coord.y)].y +
-				   Flux[uint2(coord.x + 1, coord.y)].x +
-				   Flux[uint2(coord.x, coord.y - 1)].z +
-				   Flux[uint2(coord.x, coord.y + 1)].w;
+	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
+	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
+	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
+	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
+
+	float inFlow = Flux[uint2(lidx, coord.y)].y +
+				   Flux[uint2(ridx, coord.y)].x +
+				   Flux[uint2(coord.x, bidx)].z +
+				   Flux[uint2(coord.x, tidx)].w;
 
 	float outFlow = Flux[coord].x + Flux[coord].y + Flux[coord].z + Flux[coord].w;
 
@@ -85,8 +96,8 @@ float2 simulateWaterVelocity(uint2 coord) {
 	}
 	else {
 		//I'm not confident on this line - should this be 1/meanWater or meanWater???
-		newWaterVel.x = meanWater * 0.5f * (Flux[uint2(coord.x - 1, coord.y)].y - Flux[coord].x - Flux[uint2(coord.x + 1, coord.y)].x + Flux[coord].y) / (dy);// *meanWater);
-		newWaterVel.y = meanWater * 0.5f * (Flux[uint2(coord.x, coord.y - 1)].z - Flux[coord].w - Flux[uint2(coord.x, coord.y + 1)].w + Flux[coord].z) / (dx);// *meanWater);
+		newWaterVel.x = meanWater * 0.5f * (Flux[uint2(lidx, coord.y)].y - Flux[coord].x - Flux[uint2(ridx, coord.y)].x + Flux[coord].y) / (dy);// *meanWater);
+		newWaterVel.y = meanWater * 0.5f * (Flux[uint2(coord.x, bidx)].z - Flux[coord].w - Flux[uint2(coord.x, tidx)].w + Flux[coord].z) / (dx);// *meanWater);
 	}
 
 	return newWaterVel;
@@ -117,15 +128,15 @@ float fbm(float3 p)
 {
 	float f;
 	f = 0.5000*noise(p); p = p * 2.02;
-	f += 0.2500*noise(p); p = p * 2.03;
-	f += 0.1250*noise(p);
+	//f += 0.2500*noise(p); p = p * 2.03;
+	//f += 0.1250*noise(p);
 	return f;
 }
 
 float rainPosition;
 void simulateWater(uint2 coord) {
 	//rainfall
-	float rainScale = 0.06f;
+	float rainScale = 0.03f;
 	float3 rainPos = float3(rainScale * (float)coord.x, rainScale * (float)coord.y, rainPosition);
 	float rainfall = precipRate * dt * fbm(rainPos);// *PrecipMask[coord].r;
 

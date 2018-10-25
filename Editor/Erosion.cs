@@ -7,6 +7,7 @@ public class Erosion : EditorWindow {
     private ComputeShader m_ComputeShader = null;
     private Terrain m_TerrainTile = null;
     private Texture2D m_PrecipitationMask = null;
+    private Texture2D m_HeightInput = null;
 
     //decent default values here
     private int m_NumHydraulicIterations = 300;
@@ -63,13 +64,11 @@ public class Erosion : EditorWindow {
 
         m_TerrainHeightRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_TerrainHeightRT.format = RenderTextureFormat.RFloat;
-        //m_TerrainHeightRT.format = RenderTextureFormat.RHalf;
         m_TerrainHeightRT.enableRandomWrite = true;
         m_TerrainHeightRT.Create();
 
         m_TerrainHeightPrevRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_TerrainHeightPrevRT.format = RenderTextureFormat.RFloat;
-        //m_TerrainHeightPrevRT.format = RenderTextureFormat.RHalf;
         m_TerrainHeightPrevRT.enableRandomWrite = true;
         m_TerrainHeightPrevRT.Create();
 
@@ -95,7 +94,6 @@ public class Erosion : EditorWindow {
         m_WaterVelPrevRT.enableRandomWrite = true;
         m_WaterVelPrevRT.Create();
 
-
         //flux
         m_FluxRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_FluxRT.format = RenderTextureFormat.ARGBFloat;
@@ -117,14 +115,6 @@ public class Erosion : EditorWindow {
         m_SedimentPrevRT.format = RenderTextureFormat.RFloat;
         m_SedimentPrevRT.enableRandomWrite = true;
         m_SedimentPrevRT.Create();
-
-        /*
-        //Terrain Normals
-        m_TerrainNormalsRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
-        m_TerrainNormalsRT.format = RenderTextureFormat.ARGBFloat;
-        m_TerrainNormalsRT.enableRandomWrite = true;
-        m_TerrainNormalsRT.Create();
-        */
 
         //we did all the things!
         m_Init = true;
@@ -157,19 +147,15 @@ public class Erosion : EditorWindow {
 
     void PrepareTextureData() {
         if(m_Init) {
-            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
-            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
-            //Graphics.Blit(m_TerrainTile.terrainData.normalMapTexture, m_TerrainNormalsRT);
+            //Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
+            //Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
+            Graphics.Blit(m_HeightInput, m_TerrainHeightRT);
+            Graphics.Blit(m_HeightInput, m_TerrainHeightPrevRT);
             Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
         }
     }
 
     void SwapBuffers(RenderTexture a, RenderTexture b) {
-        /*RenderTexture tmp = a;
-        a = b;
-        b = tmp;
-        */
-        
         
         RenderTexture tmp = RenderTexture.GetTemporary(m_texDim[0], m_texDim[1], 0, a.format);
 
@@ -179,7 +165,6 @@ public class Erosion : EditorWindow {
         
 
         RenderTexture.ReleaseTemporary(tmp);
-        
     }
 
     void Simulate() {
@@ -266,6 +251,7 @@ public class Erosion : EditorWindow {
     void OnGUI() {
         m_ComputeShader = (ComputeShader)EditorGUILayout.ObjectField("Compute Shader", m_ComputeShader, typeof(ComputeShader));
         m_TerrainTile = (Terrain)EditorGUILayout.ObjectField("Terrain Tile", m_TerrainTile, typeof(Terrain));
+        m_HeightInput = (Texture2D)EditorGUILayout.ObjectField("Input Heightfield", m_HeightInput, typeof(Texture2D));
         m_PrecipitationMask = (Texture2D)EditorGUILayout.ObjectField("Precipitation Mask", m_PrecipitationMask, typeof(Texture2D));
         m_NumHydraulicIterations = EditorGUILayout.IntField("# Iterations", m_NumHydraulicIterations);
         m_DeltaTime = EditorGUILayout.FloatField("Simulation time step", m_DeltaTime);
@@ -289,7 +275,7 @@ public class Erosion : EditorWindow {
             Simulate();
         }
 
-        int dy = 340;
+        int dy = 420;
         int x = 0;
         int y = dy;
 
