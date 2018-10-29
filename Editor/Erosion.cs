@@ -2,28 +2,44 @@
 using UnityEditor;
 
 public class Erosion : EditorWindow {
+    /*
+    class ErosionOp {
+        enum ErosionOpType {
+            Hydraulic,
+            Thermal,
+            Wind
+        };
+
+        public virtual void Execute() = 0;
+    }
+
+    class ErosionStack {
+        List<ErosionOp> m_Ops = new List<ErosionOp>();
+    }
+    */
+
     private bool m_Init = false;
 
-    private ComputeShader m_ComputeShader = null;
-    private Terrain m_TerrainTile = null;
-    private Texture2D m_PrecipitationMask = null;
-    private Texture2D m_HeightInput = null;
+    private ComputeShader m_ComputeShader =   null;
+    private Terrain m_TerrainTile =           null;
+    private Texture2D m_PrecipitationMask =   null;
+    private Texture2D m_HeightInput =         null;
 
     //decent default values here
-    private int m_NumHydraulicIterations = 300;
-    private int m_NumThermalIterations = 10;
+    private int m_NumHydraulicIterations =    300;
+    private int m_NumThermalIterations =      10;
 
-    private float m_DeltaTime = 0.01f;
-    private float m_PrecipRate = 0.1f;
-    private float m_FlowRate = -0.07f;
-    private float m_SedimentCapacity = 50.0f;
-    private float m_SedimentDissolveRate = 0.01f;
-    private float m_SedimentDepositRate = 0.01f;
-    private float m_EvaporationRate = 0.0001f;
-    private float m_SmoothingFactor = 0.05f;
+    private float m_DeltaTime =               0.01f;
+    private float m_PrecipRate =              0.1f;
+    private float m_FlowRate =               -0.07f;
+    private float m_SedimentCapacity =        50.0f;
+    private float m_SedimentDissolveRate =    0.01f;
+    private float m_SedimentDepositRate =     0.01f;
+    private float m_EvaporationRate =         0.0001f;
+    private float m_SmoothingFactor =         0.05f;
 
     //thermal erosion
-    private float m_AngleOfRepose = 35.0f; //in degrees
+    private float m_AngleOfRepose =           35.0f; //in degrees
 
     private int[] m_texDim = { 256, 256 };
 
@@ -44,6 +60,8 @@ public class Erosion : EditorWindow {
     private RenderTexture m_SedimentRT;
     private RenderTexture m_SedimentPrevRT;
     //private RenderTexture m_TerrainNormalsRT;
+
+    private int tab = 0;
 
     // Add menu named "My Window" to the Window menu
     [MenuItem("Tools/Erosion")]
@@ -163,7 +181,6 @@ public class Erosion : EditorWindow {
         Graphics.Blit(b, a); //possibly only need to do the first blit, since we don't care about previous data
         Graphics.Blit(tmp, b);
         
-
         RenderTexture.ReleaseTemporary(tmp);
     }
 
@@ -244,11 +261,11 @@ public class Erosion : EditorWindow {
             Graphics.Blit(m_TerrainHeightRT, m_TerrainTile.terrainData.heightmapTexture);
             //Graphics.Blit(m_SedimentRT, m_TerrainTile.terrainData.heightmapTexture);
             //m_TerrainTile.terrain.terrainData.UpdateDirtyRegion(terrainTile.clippedLocal.x, terrainTile.clippedLocal.y, terrainTile.clippedLocal.width, terrainTile.clippedLocal.height, !terrainTile.terrain.drawInstanced);
-            //m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, (int)m_TerrainTile.terrainData.size.x, (int)m_TerrainTile.terrainData.size.y, true);
+            m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, (int)m_TerrainTile.terrainData.size.x, (int)m_TerrainTile.terrainData.size.y, true);
         }
     }
 
-    void OnGUI() {
+    void OnGUIHydraulic() {
         m_ComputeShader = (ComputeShader)EditorGUILayout.ObjectField("Compute Shader", m_ComputeShader, typeof(ComputeShader));
         m_TerrainTile = (Terrain)EditorGUILayout.ObjectField("Terrain Tile", m_TerrainTile, typeof(Terrain));
         m_HeightInput = (Texture2D)EditorGUILayout.ObjectField("Input Heightfield", m_HeightInput, typeof(Texture2D));
@@ -262,20 +279,24 @@ public class Erosion : EditorWindow {
         m_SedimentDepositRate = EditorGUILayout.FloatField("Sediment Deposit Rate", m_SedimentDepositRate);
         m_EvaporationRate = EditorGUILayout.FloatField("Evaporation Rate", m_EvaporationRate);
 
-        m_NumThermalIterations = EditorGUILayout.IntField("# Iterations", m_NumThermalIterations);
-        m_SmoothingFactor = EditorGUILayout.FloatField("Smoothing Factor", m_SmoothingFactor);
-        m_AngleOfRepose = EditorGUILayout.FloatField("Angle of Repose", m_AngleOfRepose);
-
         if (GUILayout.Button("Reset")) {
             ReleaseData();
             InitData();
         }
 
-        if(GUILayout.Button("Execute")) {
+        if (GUILayout.Button("Execute")) {
             Simulate();
         }
+    }
 
-        int dy = 420;
+    void OnGUIThermal() {
+        m_NumThermalIterations = EditorGUILayout.IntField("# Iterations", m_NumThermalIterations);
+        m_SmoothingFactor = EditorGUILayout.FloatField("Smoothing Factor", m_SmoothingFactor);
+        m_AngleOfRepose = EditorGUILayout.FloatField("Angle of Repose", m_AngleOfRepose);
+    }
+
+    void OnGUIDebug() {
+        int dy = 60;
         int x = 0;
         int y = dy;
 
@@ -293,6 +314,24 @@ public class Erosion : EditorWindow {
         y += 256 + 30;
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
+    }
+
+    void OnGUI() {
+        tab = GUILayout.Toolbar(tab, new string[] { "Hydraulic", "Thermal", "Debug" });//"Wind", "Tectonics", "Volcanic" });
+
+        switch(tab) {
+            case 0:
+                OnGUIHydraulic();
+                break;
+            case 1:
+                OnGUIThermal();
+                break;
+            case 2:
+                OnGUIDebug();
+                break;
+            default:
+                break;
+        }
 
         this.Repaint();
     }
