@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEditor;
+using UnityEngine.Experimental.TerrainAPI;
 
 public class Erosion : EditorWindow {
     /*
@@ -193,11 +194,15 @@ public class Erosion : EditorWindow {
             int hydraulicKernelIdx = m_ComputeShader.FindKernel("HydraulicErosion");
             int thermalKernelIdx = m_ComputeShader.FindKernel("ThermalErosion");
             int waterFlowKernelIdx = m_ComputeShader.FindKernel("SimulateWaterFlow");
+            int diffuseHeightKernelIdx = m_ComputeShader.FindKernel("DiffuseHeight");
 
             float m = Mathf.Tan(m_AngleOfRepose * Mathf.Deg2Rad);
 
+            Debug.Log(m_TerrainTile.terrainData.size);
+
             //global parameters
             m_ComputeShader.SetVector("texDim", new Vector4(m_texDim[0], m_texDim[1], 0.0f, 0.0f));
+            m_ComputeShader.SetVector("terrainDim", new Vector4(m_TerrainTile.terrainData.size.x, m_TerrainTile.terrainData.size.y, m_TerrainTile.terrainData.size.z));
             m_ComputeShader.SetFloat("dt", m_DeltaTime);
             m_ComputeShader.SetFloat("precipRate", m_PrecipRate);
             m_ComputeShader.SetFloat("flowRate", m_FlowRate);
@@ -232,9 +237,13 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetTexture(hydraulicKernelIdx, "Sediment", m_SedimentRT);
             m_ComputeShader.SetTexture(hydraulicKernelIdx, "SedimentPrev", m_SedimentPrevRT);
 
-            //thermal erosion textures
+            //thermal erosion shader textures
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeight", m_TerrainHeightRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+
+            //diffuse height parameters
+            m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeight", m_TerrainHeightRT);
+            m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
 
 
             for (int i = 0; i < m_NumHydraulicIterations; i++) {
@@ -250,18 +259,16 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_WaterRT, m_WaterPrevRT);
                 Graphics.Blit(m_WaterVelRT, m_WaterVelPrevRT);
                 Graphics.Blit(m_FluxRT, m_FluxPrevRT);
-
-                for (int j = 0; j < m_NumThermalIterations; j++) {
-                    m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
-                    SwapBuffers(m_TerrainHeightRT, m_TerrainHeightPrevRT);
-                }
             }
 
-            //Blit the output back to the terrain heightmap
+            for (int j = 0; j < m_NumThermalIterations; j++) {
+                m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
+                //SwapBuffers(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+                Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+            }
+
             Graphics.Blit(m_TerrainHeightRT, m_TerrainTile.terrainData.heightmapTexture);
-            //Graphics.Blit(m_SedimentRT, m_TerrainTile.terrainData.heightmapTexture);
-            //m_TerrainTile.terrain.terrainData.UpdateDirtyRegion(terrainTile.clippedLocal.x, terrainTile.clippedLocal.y, terrainTile.clippedLocal.width, terrainTile.clippedLocal.height, !terrainTile.terrain.drawInstanced);
-            m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, (int)m_TerrainTile.terrainData.size.x, (int)m_TerrainTile.terrainData.size.y, true);
+            m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, m_TerrainTile.terrainData.heightmapTexture.width, m_TerrainTile.terrainData.heightmapTexture.height, true);
         }
     }
 
@@ -314,6 +321,9 @@ public class Erosion : EditorWindow {
         y += 256 + 30;
         EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
         EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
+        x += 256 + 2; y = dy + 256 + 30;
+        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Output Height");
+        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_TerrainHeightRT);
     }
 
     void OnGUI() {

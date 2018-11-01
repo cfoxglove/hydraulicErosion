@@ -32,6 +32,7 @@ float sedimentDepositRate;
 float evaporationRate;
 
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
+float3 terrainDim; //the dimensions of the terrain in world units
 
 //use WaterPrev here because we have not yet calculated this frame's buffer
 float4 simulateFlux(uint2 coord) {
@@ -234,7 +235,7 @@ void HydraulicErosion (uint3 id : SV_DispatchThreadID)
 //
 // Thermal Erosion
 //
-float angleOfRepose; //actually tan(theta)
+float angleOfRepose; //actually tan(theta), which is slope (m)
 int numThermalIterations;
 
 void simulateThermalErosion(uint2 coord) {
@@ -243,27 +244,42 @@ void simulateThermalErosion(uint2 coord) {
 	}
 
 	float h = TerrainHeightPrev[coord];
-	float dx = 1.0f / texDim[0];
+	float dx = texDim[0] / terrainDim[0];
+	float dy = texDim[1] / terrainDim[2]; //unity is y-up
 
-	float a = 1.0f / (texDim[0] * texDim[1]);
+	float dhl = terrainDim[0] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y)]);
+	float dhr = terrainDim[0] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y)]);
+	float dht = terrainDim[2] * (h - TerrainHeightPrev[uint2(coord.x, coord.y + 1)]);
+	float dhb = terrainDim[2] * (h - TerrainHeightPrev[uint2(coord.x, coord.y - 1)]);
+	
+	float ml = abs(dhl / dx);
+	float mr = abs(dhr / dx);
+	float mt = abs(dhr / dy);
+	float mb = abs(dhb / dy);
 
-	float dhl = h - TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
-	float dhr = h - TerrainHeightPrev[uint2(coord.x + 1, coord.y)];
-	float dht = h - TerrainHeightPrev[uint2(coord.x, coord.y + 1)];
-	float dhb = h - TerrainHeightPrev[uint2(coord.x, coord.y - 1)];
+	//sign multiplier
+	float sl = dhl / abs(dhl);
+	float sr = dhr / abs(dhr);
+	float st = dht / abs(dht);
+	float sb = dhb / abs(dhb);
 
-	if (abs(dhl / dx) > angleOfRepose) {
-		TerrainHeight[coord] -= a * dt * dhl / 8.0f;
+	float dv = 0; //volume of sediment moved
+	if (ml > angleOfRepose) {
+		dv += (dhl / 8.0f);//sl * (abs(dhl) / (2.0f * (angleOfRepose + 1.0f)));
 	}
-	if (abs(dhr / dx) > angleOfRepose) {
-		TerrainHeight[coord] -= a * dt * dhr / 8.0f;
+	if (mr > angleOfRepose) {
+		dv += (dhr / 8.0f);//sr * (abs(dhr) / (2.0f * (angleOfRepose + 1.0f)));
 	}
-	if (abs(dht / dx) > angleOfRepose) {
-		TerrainHeight[coord] -= a * dt * dht / 8.0f;
+	if (mt > angleOfRepose) {
+		dv += (dht / 8.0f);//st * (abs(dht) / (2.0f * (angleOfRepose + 1.0f)));
 	}
-	if (abs(dhb / dx) > angleOfRepose) {
-		TerrainHeight[coord] -= a * dt * dhb / 8.0f;
+	if (mb > angleOfRepose) {
+		dv += (dhb / 8.0f);//sb * (abs(dhb) / (2.0f * (angleOfRepose + 1.0f)));
 	}
+
+	//dv = max();
+
+	TerrainHeight[coord] -= dt * dv;//clamp(dv, -1.0f, 1.0f);
 }
 
 #pragma kernel ThermalErosion
@@ -271,7 +287,26 @@ void simulateThermalErosion(uint2 coord) {
 [numthreads(8, 8, 1)]
 void ThermalErosion(uint3 id : SV_DispatchThreadID)
 {
-	//for (int i = 0; i < numThermalIterations; i++) {
-		simulateThermalErosion(id.xy);
-	//}
+	simulateThermalErosion(id.xy);
+}
+
+
+//
+// diffuse / blur height
+//
+
+void diffuseHeight(uint2 coord) {
+	float left = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
+	float right = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
+	float top = TerrainHeightPrev[uint2(coord.x, coord.y + 1)];
+	float bottom = TerrainHeightPrev[uint2(coord.x, coord.y - 1)];
+
+	TerrainHeight[coord] = 0.25f * (left + right + top + bottom);
+}
+
+#pragma kernel DiffuseHeight
+[numthreads(8, 8, 1)]
+void DiffuseHeight(uint3 id : SV_DispatchThreadID)
+{
+	diffuseHeight(id.xy);
 }
