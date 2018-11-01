@@ -166,10 +166,10 @@ public class Erosion : EditorWindow {
 
     void PrepareTextureData() {
         if(m_Init) {
-            //Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
-            //Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
-            Graphics.Blit(m_HeightInput, m_TerrainHeightRT);
-            Graphics.Blit(m_HeightInput, m_TerrainHeightPrevRT);
+            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
+            Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
+            //Graphics.Blit(m_HeightInput, m_TerrainHeightRT);
+            //Graphics.Blit(m_HeightInput, m_TerrainHeightPrevRT);
             Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
         }
     }
@@ -267,6 +267,8 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
             }
 
+
+            //copy our final height back to the terrain height buffer
             Graphics.Blit(m_TerrainHeightRT, m_TerrainTile.terrainData.heightmapTexture);
             m_TerrainTile.terrainData.UpdateDirtyRegion(0, 0, m_TerrainTile.terrainData.heightmapTexture.width, m_TerrainTile.terrainData.heightmapTexture.height, true);
         }
