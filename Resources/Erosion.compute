@@ -7,6 +7,7 @@
 //
 
 RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
+RWTexture2D<float4> ReposeMask;
 
 RWTexture2D<float>  TerrainHeight;      //terrain heightmap
 RWTexture2D<float>  TerrainHeightPrev;  //previous frame
@@ -23,9 +24,9 @@ RWTexture2D<float4> FluxPrev;    //flux
 RWTexture2D<float>  Sediment;    //suspended sediment concentration (being transported by the water)
 RWTexture2D<float>  SedimentPrev;
 
-float dt;          //the time step for the simulation
-float precipRate;  //the rate at which we will add water via rainfall
-float flowRate;    //how fast water flows
+float dt;                    //the time step for the simulation
+float precipRate;            //the rate at which we will add water via rainfall
+float flowRate;              //how fast water flows
 float sedimentCapacity;
 float sedimentDissolveRate;
 float sedimentDepositRate;
@@ -235,7 +236,8 @@ void HydraulicErosion (uint3 id : SV_DispatchThreadID)
 //
 // Thermal Erosion
 //
-float angleOfRepose; //actually tan(theta), which is slope (m)
+float4 angleOfRepose; //actually tan(theta), which is slope (m)
+float4 dxdy; //<dx, dy, dxy, 0.0>
 int numThermalIterations;
 
 void simulateThermalErosion(uint2 coord) {
@@ -244,42 +246,42 @@ void simulateThermalErosion(uint2 coord) {
 	}
 
 	float h = TerrainHeightPrev[coord];
-	float dx = texDim[0] / terrainDim[0];
-	float dy = texDim[1] / terrainDim[2]; //unity is y-up
 
-	float dhl = terrainDim[0] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y)]);
-	float dhr = terrainDim[0] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y)]);
-	float dht = terrainDim[2] * (h - TerrainHeightPrev[uint2(coord.x, coord.y + 1)]);
-	float dhb = terrainDim[2] * (h - TerrainHeightPrev[uint2(coord.x, coord.y - 1)]);
+	float dhl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y)]);
+	float dhr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y)]);
+	float dht = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x, coord.y + 1)]);
+	float dhb = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x, coord.y - 1)]);
+
+	float dhtl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y + 1)]);
+	float dhtr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y + 1)]);
+	float dhbl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y - 1)]);
+	float dhbr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y - 1)]);
 	
-	float ml = abs(dhl / dx);
-	float mr = abs(dhr / dx);
-	float mt = abs(dhr / dy);
-	float mb = abs(dhb / dy);
+	float ml = abs(dhl / dxdy.x);
+	float mr = abs(dhr / dxdy.x);
+	float mt = abs(dhr / dxdy.y);
+	float mb = abs(dhb / dxdy.y);
 
-	//sign multiplier
-	float sl = dhl / abs(dhl);
-	float sr = dhr / abs(dhr);
-	float st = dht / abs(dht);
-	float sb = dhb / abs(dhb);
+	float mtl = abs(dhtl / dxdy.z);
+	float mtr = abs(dhtr / dxdy.z);
+	float mbl = abs(dhbl / dxdy.z);
+	float mbr = abs(dhbr / dxdy.z);
+
+	float tau = lerp(angleOfRepose.x, angleOfRepose.y, ReposeMask[coord].x);
 
 	float dv = 0; //volume of sediment moved
-	if (ml > angleOfRepose) {
-		dv += (dhl / 8.0f);//sl * (abs(dhl) / (2.0f * (angleOfRepose + 1.0f)));
-	}
-	if (mr > angleOfRepose) {
-		dv += (dhr / 8.0f);//sr * (abs(dhr) / (2.0f * (angleOfRepose + 1.0f)));
-	}
-	if (mt > angleOfRepose) {
-		dv += (dht / 8.0f);//st * (abs(dht) / (2.0f * (angleOfRepose + 1.0f)));
-	}
-	if (mb > angleOfRepose) {
-		dv += (dhb / 8.0f);//sb * (abs(dhb) / (2.0f * (angleOfRepose + 1.0f)));
-	}
+	float r = 16.0f;
+	if (ml > tau) { dv += (dhl / r); }
+	if (mr > tau) { dv += (dhr / r); }
+	if (mt > tau) { dv += (dht / r); }
+	if (mb > tau) { dv += (dhb / r); }
 
-	//dv = max();
+	if (mtl > tau) { dv += (dhtl / r); }
+	if (mtr > tau) { dv += (dhtr / r); }
+	if (mbl > tau) { dv += (dhbl / r); }
+	if (mbr > tau) { dv += (dhbr / r); }
 
-	TerrainHeight[coord] -= dt * dv;//clamp(dv, -1.0f, 1.0f);
+	TerrainHeight[coord] -= dt * dv;
 }
 
 #pragma kernel ThermalErosion
