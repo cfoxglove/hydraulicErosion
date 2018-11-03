@@ -3,22 +3,7 @@ using UnityEditor;
 using UnityEngine.Experimental.TerrainAPI;
 
 public class Erosion : EditorWindow {
-    /*
-    class ErosionOp {
-        enum ErosionOpType {
-            Hydraulic,
-            Thermal,
-            Wind
-        };
-
-        public virtual void Execute() = 0;
-    }
-
-    class ErosionStack {
-        List<ErosionOp> m_Ops = new List<ErosionOp>();
-    }
-    */
-
+    #region parameters
     private bool m_Init = false;
 
     private ComputeShader m_ComputeShader =   null;
@@ -39,12 +24,14 @@ public class Erosion : EditorWindow {
     private float m_SedimentDepositRate =     0.01f;
     private float m_EvaporationRate =         0.0001f;
     private float m_SmoothingFactor =         0.05f;
+    #endregion
 
     //thermal erosion
     private Vector2 m_AngleOfRepose =         new Vector2(35.0f, 35.0f); //in degrees
 
     private int[] m_texDim = { 256, 256 };
 
+    #region render textures
     private RenderTexture m_PrecipMaskRT;
     private RenderTexture m_ReposeMaskRT;
 
@@ -63,6 +50,7 @@ public class Erosion : EditorWindow {
     private RenderTexture m_SedimentRT;
     private RenderTexture m_SedimentPrevRT;
     //private RenderTexture m_TerrainNormalsRT;
+    #endregion
 
     private int tab = 0;
 
@@ -73,6 +61,7 @@ public class Erosion : EditorWindow {
         window.Show();
     }
 
+    #region alloc / dealloc
     void InitData() {
         if(m_Init == true) { return; }
 
@@ -170,7 +159,9 @@ public class Erosion : EditorWindow {
             m_Init = false;
         }
     }
+    #endregion
 
+    #region sim
     ComputeShader GetComputeShader() {
         if (m_ComputeShader == null) {
             m_ComputeShader = (ComputeShader)Resources.Load("Erosion");
@@ -299,7 +290,9 @@ public class Erosion : EditorWindow {
             m_TerrainTile.ApplyDelayedHeightmapModification();
         }
     }
+    #endregion
 
+    #region GUI
     void OnGUIHydraulic() {
         m_TerrainTile = (Terrain)EditorGUILayout.ObjectField("Terrain Tile", m_TerrainTile, typeof(Terrain));
         m_HeightInput = (Texture2D)EditorGUILayout.ObjectField("Input Heightfield", m_HeightInput, typeof(Texture2D));
@@ -373,4 +366,5 @@ public class Erosion : EditorWindow {
 
         this.Repaint();
     }
+    #endregion
 }
