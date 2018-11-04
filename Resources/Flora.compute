@@ -1,16 +1,17 @@
 ﻿struct ParticleData {
 	float3 _pos;
 	float3 _vel;
+	float  _age;
 };
 
 
-RWTexture2D<float> ParticleDensity;
+RWTexture2D<float> SeedDensity;
+RWTexture2D<float> FoliageDensity;
 RWTexture2D<float> HeightMap;
 
 float RandomSeed;
 int NumParticles;
 RWStructuredBuffer<ParticleData> FloraParticles;
-//StructuredBuffer<FloraData> FloraParticlePrev;
 
 
 float hash(float n)
@@ -45,13 +46,12 @@ float noise(in float3 x)
 	return res;
 }
 
-
 void simulateParticles(int id) {
 	float dt = 0.1f;
 
 	//update velocities
 	float g = -9.8f;
-	float3 wind = float3(1.0f, 0.0f, 0.0f);
+	float3 wind = float3(10.0f, 0.0f, 0.0f);
 	FloraParticles[id]._vel.z += g * dt;
 	FloraParticles[id]._vel += dt * wind;
 
@@ -66,13 +66,19 @@ void checkParticleBounds(int id) {
 		FloraParticles[id]._pos.z < HeightMap[coords] || FloraParticles[id]._pos.z > 1.0f) {
 		
 		//reset particle
-		float3 a = float3(RandomSeed + 1.4215f * (float)id + 11839.487f, RandomSeed + 3.849f * (float)id + 9745.27f, RandomSeed + 8.42f * (float)id + 234.43f);
-		float3 b = float3(RandomSeed + 7.4571f * (float)id + 97176.961f, RandomSeed + 7.315f * (float)id + 6451.63f, RandomSeed + 2.96f * (float)id + 931.29f);
-		float3 c = float3(RandomSeed + 3.1732f * (float)id + 43182.234f, RandomSeed + 2.471f * (float)id + 3851.89f, RandomSeed + 7.39f * (float)id + 703.65f);
+		FloraParticles[id]._age = -1.0f;
+	}
+}
 
-		FloraParticles[id]._pos.x = noise(a) + 0.1f * noise(b + c);
-		FloraParticles[id]._pos.y = noise(b) + 0.1f * noise(a + c);
-		FloraParticles[id]._pos.z = noise(c) + 0.1f * noise(a + b);
+void spawnParticles(int id) {
+	if (FloraParticles[id]._age < 0.0f) {
+		uint2 coords = uint2((uint)(256.0f * hash(RandomSeed + (float)id)), (uint)(256.0f * hash(RandomSeed + (float)id + 7432.132f)));
+		float p = FoliageDensity[coords];
+
+		float r = hash(RandomSeed + 4321.432f + 8.163f * (float)id);
+		if (r > p) {
+			FloraParticles[id]._age = 1.0f;
+		}
 	}
 }
 
@@ -82,6 +88,7 @@ void FloraSimParticles (uint3 id : SV_DispatchThreadID)
 {
 	simulateParticles(id.x);
 	checkParticleBounds(id.x);
+	spawnParticles(id.x);
 }
 
 
@@ -90,17 +97,24 @@ void FloraSimParticles (uint3 id : SV_DispatchThreadID)
 void FloraSimTextures(uint3 id : SV_DispatchThreadID) {
 	float2 uv = float2((float)id.x / 256.0f, (float)id.y / 256.0f);
 	
+	/*
+	float mx = HeightMap[uint2(id.x + 1, id.y)] - HeightMap[uint2(id.x - 1, id.y)];
+	float my = HeightMap[uint2(id.x, id.y + 1)] - HeightMap[uint2(id.x, id.y - 1)];
+
+	float m = 0.0f;// (mx + my) / 2.0f;
+	*/
+	
 	//terribly slow - optimize!!!
-	float min_d = 999999.0f;
+	float min_d = 99999999.0f;
 	for (int i = 0; i < NumParticles; i++) {
-		if (FloraParticles[i]._pos.z < HeightMap[id.xy]) {
+		if (FloraParticles[i]._age > 0.0f && FloraParticles[i]._pos.z < HeightMap[id.xy]) {
 			float2 v = FloraParticles[i]._pos.xy - uv;
-			float d = 100.0f * length(v);
+			float d = 50.0f * length(v);
 			if (d < min_d) {
 				min_d = d;
 			}
 		}
 	}
 
-	ParticleDensity[id.xy] += 0.01f * (1.0f - saturate(min_d));
+	SeedDensity[id.xy] += 0.1f * (1.0f - saturate(min_d));
 }
