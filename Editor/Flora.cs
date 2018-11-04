@@ -11,6 +11,11 @@ public class Flora : EditorWindow {
         public Vector3 _vel;
     }
 
+    [SerializeField]
+    Texture2D m_HeightMapTex;
+
+    RenderTexture m_HeightMapRT;
+    RenderTexture m_WindVelRT; //either user supplied, or from a dynamic fluid sim
     RenderTexture m_ParticleDensityRT;
 
     int m_NumFloraParticles = 1024;
@@ -18,6 +23,8 @@ public class Flora : EditorWindow {
     ComputeBuffer m_FloraParticleBuffer;
 
     ComputeShader m_FloraCompute;
+
+    int m_NumIterations = 10;
 
     #region GUI
     // Add menu named "My Window" to the Window menu
@@ -36,7 +43,9 @@ public class Flora : EditorWindow {
             Simulate();
         }
 
-        EditorGUI.DrawPreviewTexture(new Rect(0, 100, 256, 256), m_ParticleDensityRT);
+        m_HeightMapTex = (Texture2D)EditorGUILayout.ObjectField("HeightMap", m_HeightMapTex, typeof(Texture2D));
+
+        EditorGUI.DrawPreviewTexture(new Rect(0, 150, 256, 256), m_ParticleDensityRT);
     }
     #endregion
 
@@ -54,6 +63,15 @@ public class Flora : EditorWindow {
             m_ParticleDensityRT.format = RenderTextureFormat.RFloat;
             m_ParticleDensityRT.enableRandomWrite = true;
             m_ParticleDensityRT.Create();
+
+            m_HeightMapRT = new RenderTexture(256, 256, 0);
+            m_HeightMapRT.format = RenderTextureFormat.RFloat;
+            m_HeightMapRT.enableRandomWrite = true;
+            m_HeightMapRT.Create();
+
+            if(m_HeightMapTex != null) {
+                Graphics.Blit(m_HeightMapTex, m_HeightMapRT);
+            }
 
             m_FloraParticles = new FloraParticle[m_NumFloraParticles];
 
@@ -87,23 +105,28 @@ public class Flora : EditorWindow {
     void Simulate() {
         InitData();
         if(m_FloraCompute != null) {
-            int kFloraParticles = m_FloraCompute.FindKernel("FloraSimParticles");
-            int kFloraTextures = m_FloraCompute.FindKernel("FloraSimTextures");
+            for (int i = 0; i < m_NumIterations; i++) {
+                float rSeed = Random.Range(0.0f, 9999999.0f);
+                int kFloraParticles = m_FloraCompute.FindKernel("FloraSimParticles");
+                int kFloraTextures = m_FloraCompute.FindKernel("FloraSimTextures");
 
-            Vector3Int particleThreadGroups = new Vector3Int(m_NumFloraParticles / 16, 1, 1);
-            Vector3Int textureThreadGroups = new Vector3Int(m_ParticleDensityRT.width / 8, m_ParticleDensityRT.height / 8, 1);
+                Vector3Int particleThreadGroups = new Vector3Int(m_NumFloraParticles / 16, 1, 1);
+                Vector3Int textureThreadGroups = new Vector3Int(m_ParticleDensityRT.width / 8, m_ParticleDensityRT.height / 8, 1);
 
-            //set compute shader buffers, etc
-            m_FloraCompute.SetBuffer(kFloraParticles, "FloraParticles", m_FloraParticleBuffer);
+                //set compute shader buffers, etc
+                m_FloraCompute.SetBuffer(kFloraParticles, "FloraParticles", m_FloraParticleBuffer);
+                m_FloraCompute.SetTexture(kFloraParticles, "HeightMap", m_HeightMapRT);
+                m_FloraCompute.SetFloat("RandomSeed", rSeed);
 
-            m_FloraCompute.Dispatch(kFloraParticles, particleThreadGroups.x, particleThreadGroups.y, particleThreadGroups.z);
+                m_FloraCompute.Dispatch(kFloraParticles, particleThreadGroups.x, particleThreadGroups.y, particleThreadGroups.z);
 
-
-            //update density texture
-            m_FloraCompute.SetInt("NumParticles", m_NumFloraParticles);
-            m_FloraCompute.SetTexture(kFloraTextures, "ParticleDensity", m_ParticleDensityRT);
-            m_FloraCompute.SetBuffer(kFloraTextures, "FloraParticles", m_FloraParticleBuffer);
-            m_FloraCompute.Dispatch(kFloraTextures, textureThreadGroups.x, textureThreadGroups.y, textureThreadGroups.z);
+                //update density texture
+                m_FloraCompute.SetInt("NumParticles", m_NumFloraParticles);
+                m_FloraCompute.SetTexture(kFloraTextures, "ParticleDensity", m_ParticleDensityRT);
+                m_FloraCompute.SetTexture(kFloraTextures, "HeightMap", m_HeightMapRT);
+                m_FloraCompute.SetBuffer(kFloraTextures, "FloraParticles", m_FloraParticleBuffer);
+                m_FloraCompute.Dispatch(kFloraTextures, textureThreadGroups.x, textureThreadGroups.y, textureThreadGroups.z);
+            }
         }
     }
     #endregion

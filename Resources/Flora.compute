@@ -4,20 +4,76 @@
 };
 
 
-RWTexture2D<float4> ParticleDensity;
+RWTexture2D<float> ParticleDensity;
+RWTexture2D<float> HeightMap;
 
+float RandomSeed;
 int NumParticles;
 RWStructuredBuffer<ParticleData> FloraParticles;
 //StructuredBuffer<FloraData> FloraParticlePrev;
+
+
+float hash(float n)
+{
+	return frac(sin(n)*439758.5453);
+}
+
+float hash2(float n)
+{
+	return frac(sin(n)*7475713.57521);
+}
+
+
+float hash3(float n)
+{
+	return frac(sin(n)*1383295.123);
+}
+
+float noise(in float3 x)
+{
+	float3 p = floor(x);
+	float3 f = frac(x);
+
+	f = f * f * (3.0 - 2.0 * f);
+
+	float n = p.x + p.y * 57.0 + 113.0 * p.z;
+
+	float res = lerp(lerp(lerp(hash(n + 0.0), hash3(n + 1.0), f.x),
+		lerp(hash(n + 57.0), hash2(n + 58.0), f.x), f.y),
+		lerp(lerp(hash3(n + 113.0), hash2(n + 114.0), f.x),
+			lerp(hash2(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+	return res;
+}
 
 
 void simulateParticles(int id) {
 	float dt = 0.1f;
 
 	//update velocities
+	float g = -9.8f;
+	float3 wind = float3(1.0f, 0.0f, 0.0f);
+	FloraParticles[id]._vel.z += g * dt;
+	FloraParticles[id]._vel += dt * wind;
 
 	//update positions
 	FloraParticles[id]._pos += dt * FloraParticles[id]._vel;
+}
+
+void checkParticleBounds(int id) {
+	int2 coords = int2((int)(256.0f * FloraParticles[id]._pos.x), (int)(256.0f * FloraParticles[id]._pos.y));
+	if (FloraParticles[id]._pos.x < 0.0f || FloraParticles[id]._pos.x > 1.0f ||
+		FloraParticles[id]._pos.y < 0.0f || FloraParticles[id]._pos.y > 1.0f ||
+		FloraParticles[id]._pos.z < HeightMap[coords] || FloraParticles[id]._pos.z > 1.0f) {
+		
+		//reset particle
+		float3 a = float3(RandomSeed + 1.4215f * (float)id + 11839.487f, RandomSeed + 3.849f * (float)id + 9745.27f, RandomSeed + 8.42f * (float)id + 234.43f);
+		float3 b = float3(RandomSeed + 7.4571f * (float)id + 97176.961f, RandomSeed + 7.315f * (float)id + 6451.63f, RandomSeed + 2.96f * (float)id + 931.29f);
+		float3 c = float3(RandomSeed + 3.1732f * (float)id + 43182.234f, RandomSeed + 2.471f * (float)id + 3851.89f, RandomSeed + 7.39f * (float)id + 703.65f);
+
+		FloraParticles[id]._pos.x = noise(a) + 0.1f * noise(b + c);
+		FloraParticles[id]._pos.y = noise(b) + 0.1f * noise(a + c);
+		FloraParticles[id]._pos.z = noise(c) + 0.1f * noise(a + b);
+	}
 }
 
 #pragma kernel FloraSimParticles
@@ -25,6 +81,7 @@ void simulateParticles(int id) {
 void FloraSimParticles (uint3 id : SV_DispatchThreadID)
 {
 	simulateParticles(id.x);
+	checkParticleBounds(id.x);
 }
 
 
@@ -36,12 +93,14 @@ void FloraSimTextures(uint3 id : SV_DispatchThreadID) {
 	//terribly slow - optimize!!!
 	float min_d = 999999.0f;
 	for (int i = 0; i < NumParticles; i++) {
-		float2 v = FloraParticles[i]._pos.xy - uv;
-		float d = 100.0f * length(v);
-		if (d < min_d) {
-			min_d = d;
+		if (FloraParticles[i]._pos.z < HeightMap[id.xy]) {
+			float2 v = FloraParticles[i]._pos.xy - uv;
+			float d = 100.0f * length(v);
+			if (d < min_d) {
+				min_d = d;
+			}
 		}
 	}
 
-	ParticleDensity[id.xy] = saturate(min_d);
+	ParticleDensity[id.xy] += 0.01f * (1.0f - saturate(min_d));
 }
