@@ -282,6 +282,22 @@ void simulateThermalErosion(uint2 coord) {
 	if (mbr > tau) { dv += (dhbr / r); }
 
 	TerrainHeight[coord] -= dt * dv;
+	Sediment[coord] = SedimentPrev[coord] + dt * dv;
+}
+
+//
+// diffuse / blur height
+//
+
+void diffuseHeight(uint2 coord, float amt, int iterations) {
+	//for (int i = 0; i < iterations; i++) {
+		float left = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
+		float right = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
+		float top = TerrainHeightPrev[uint2(coord.x, coord.y + 1)];
+		float bottom = TerrainHeightPrev[uint2(coord.x, coord.y - 1)];
+
+		TerrainHeight[coord] = lerp(TerrainHeightPrev[coord], 0.25f * (left + right + top + bottom), amt);
+	//}
 }
 
 #pragma kernel ThermalErosion
@@ -290,25 +306,12 @@ void simulateThermalErosion(uint2 coord) {
 void ThermalErosion(uint3 id : SV_DispatchThreadID)
 {
 	simulateThermalErosion(id.xy);
-}
-
-
-//
-// diffuse / blur height
-//
-
-void diffuseHeight(uint2 coord) {
-	float left = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
-	float right = TerrainHeightPrev[uint2(coord.x - 1, coord.y)];
-	float top = TerrainHeightPrev[uint2(coord.x, coord.y + 1)];
-	float bottom = TerrainHeightPrev[uint2(coord.x, coord.y - 1)];
-
-	TerrainHeight[coord] = 0.25f * (left + right + top + bottom);
+	diffuseHeight(id.xy, saturate(0.0f * dt), 1);
 }
 
 #pragma kernel DiffuseHeight
 [numthreads(8, 8, 1)]
 void DiffuseHeight(uint3 id : SV_DispatchThreadID)
 {
-	diffuseHeight(id.xy);
+	diffuseHeight(id.xy, 1.0f, 100);
 }

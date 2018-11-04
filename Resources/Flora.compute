@@ -1,14 +1,47 @@
-﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel Flora
+﻿struct ParticleData {
+	float3 _pos;
+	float3 _vel;
+};
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Density;
 
-[numthreads(8,8,1)]
-void Flora (uint3 id : SV_DispatchThreadID)
+RWTexture2D<float4> ParticleDensity;
+
+int NumParticles;
+RWStructuredBuffer<ParticleData> FloraParticles;
+//StructuredBuffer<FloraData> FloraParticlePrev;
+
+
+void simulateParticles(int id) {
+	float dt = 0.1f;
+
+	//update velocities
+
+	//update positions
+	FloraParticles[id]._pos += dt * FloraParticles[id]._vel;
+}
+
+#pragma kernel FloraSimParticles
+[numthreads(16, 1, 1)]
+void FloraSimParticles (uint3 id : SV_DispatchThreadID)
 {
-    // TODO: insert actual code here!
+	simulateParticles(id.x);
+}
 
-    Density[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+
+#pragma kernel FloraSimTextures
+[numthreads(8, 8, 1)]
+void FloraSimTextures(uint3 id : SV_DispatchThreadID) {
+	float2 uv = float2((float)id.x / 256.0f, (float)id.y / 256.0f);
+	
+	//terribly slow - optimize!!!
+	float min_d = 999999.0f;
+	for (int i = 0; i < NumParticles; i++) {
+		float2 v = FloraParticles[i]._pos.xy - uv;
+		float d = 100.0f * length(v);
+		if (d < min_d) {
+			min_d = d;
+		}
+	}
+
+	ParticleDensity[id.xy] = saturate(min_d);
 }

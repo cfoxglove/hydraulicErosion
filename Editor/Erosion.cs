@@ -184,17 +184,6 @@ public class Erosion : EditorWindow {
         }
     }
 
-    void SwapBuffers(RenderTexture a, RenderTexture b) {
-        
-        RenderTexture tmp = RenderTexture.GetTemporary(m_texDim[0], m_texDim[1], 0, a.format);
-
-        Graphics.Blit(a, tmp);
-        Graphics.Blit(b, a); //possibly only need to do the first blit, since we don't care about previous data
-        Graphics.Blit(tmp, b);
-        
-        RenderTexture.ReleaseTemporary(tmp);
-    }
-
     void Simulate() {
         m_ComputeShader = GetComputeShader();
         if (m_ComputeShader != null) {
@@ -207,7 +196,11 @@ public class Erosion : EditorWindow {
             int waterFlowKernelIdx = m_ComputeShader.FindKernel("SimulateWaterFlow");
             int diffuseHeightKernelIdx = m_ComputeShader.FindKernel("DiffuseHeight");
 
+            //precompute some values on the CPU (constants in the shader)
             Vector2 m = new Vector2(Mathf.Tan(m_AngleOfRepose.x * Mathf.Deg2Rad), Mathf.Tan(m_AngleOfRepose.y * Mathf.Deg2Rad));
+            float dx = m_texDim[0] / m_TerrainTile.terrainData.size.x;
+            float dy = m_texDim[1] / m_TerrainTile.terrainData.size.y;
+            float dxy = Mathf.Sqrt(dx * dx + dy * dy);
 
             Debug.Log(m_TerrainTile.terrainData.size);
 
@@ -223,10 +216,7 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetFloat("evaporationRate", m_EvaporationRate);
             m_ComputeShader.SetInt("numThermalIterations", m_NumThermalIterations);
 
-            float dx = m_texDim[0] / m_TerrainTile.terrainData.size.x;
-            float dy = m_texDim[1] / m_TerrainTile.terrainData.size.y;
-
-            m_ComputeShader.SetVector("dxdy", new Vector4(dx, dy, Mathf.Sqrt(dx * dx + dy * dy)));
+            m_ComputeShader.SetVector("dxdy", new Vector4(dx, dy, dxy));
             m_ComputeShader.SetVector("angleOfRepose", new Vector4(m.x, m.y, 0.0f, 0.0f));
 
             //water flow simulation
@@ -256,6 +246,8 @@ public class Erosion : EditorWindow {
             //thermal erosion shader textures
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeight", m_TerrainHeightRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+            m_ComputeShader.SetTexture(thermalKernelIdx, "Sediment", m_SedimentRT);
+            m_ComputeShader.SetTexture(thermalKernelIdx, "SedimentPrev", m_SedimentPrevRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "ReposeMask", m_ReposeMaskRT);
 
             //diffuse height parameters
@@ -281,6 +273,7 @@ public class Erosion : EditorWindow {
             for (int j = 0; j < m_NumThermalIterations; j++) {
                 m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
                 Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+                Graphics.Blit(m_SedimentRT, m_SedimentPrevRT);
             }
 
 
@@ -310,12 +303,12 @@ public class Erosion : EditorWindow {
     void OnGUIThermal() {
         m_NumThermalIterations = EditorGUILayout.IntField("# Iterations", m_NumThermalIterations);
         m_SmoothingFactor = EditorGUILayout.FloatField("Smoothing Factor", m_SmoothingFactor);
-        EditorGUILayout.MinMaxSlider(ref m_AngleOfRepose.x, ref m_AngleOfRepose.y, 0.0f, 90.0f);
+        EditorGUILayout.MinMaxSlider("Angle of Repose", ref m_AngleOfRepose.x, ref m_AngleOfRepose.y, 0.0f, 90.0f);
         m_ReposeMask = (Texture2D)EditorGUILayout.ObjectField("Repose Mask", m_ReposeMask, typeof(Texture2D));
     }
 
     void OnGUIDebug() {
-        int dy = 60;
+        int dy = 100;
         int x = 0;
         int y = dy;
 
