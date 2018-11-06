@@ -50,6 +50,7 @@ public class Flora : EditorWindow {
         m_FoliageDensityTex = (Texture2D)EditorGUILayout.ObjectField("Foliage Density", m_FoliageDensityTex, typeof(Texture2D));
 
         EditorGUI.DrawPreviewTexture(new Rect(0, 150, 256, 256), m_SeedDensityRT);
+        EditorGUI.DrawPreviewTexture(new Rect(0, 150 + 256, 256, 256), m_FoliageDensityRT);
     }
     #endregion
 

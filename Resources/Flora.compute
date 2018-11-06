@@ -51,9 +51,11 @@ void simulateParticles(int id) {
 
 	//update velocities
 	float g = -9.8f;
-	float3 wind = float3(10.0f, 0.0f, 0.0f);
+	float drag = 1.0f;
+	float3 wind = float3(0.0f, 0.0f, 0.0f);
 	FloraParticles[id]._vel.z += g * dt;
 	FloraParticles[id]._vel += dt * wind;
+	FloraParticles[id]._vel += -1.0f * drag * dt * FloraParticles[id]._vel;
 
 	//update positions
 	FloraParticles[id]._pos += dt * FloraParticles[id]._vel;
@@ -116,5 +118,5 @@ void FloraSimTextures(uint3 id : SV_DispatchThreadID) {
 		}
 	}
 
-	SeedDensity[id.xy] += 0.1f * (1.0f - saturate(min_d));
+	SeedDensity[id.xy] += 0.6f * (1.0f - saturate(min_d));
 }

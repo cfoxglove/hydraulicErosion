@@ -11,6 +11,7 @@ public class Erosion : EditorWindow {
     private Texture2D m_PrecipitationMask =   null;
     private Texture2D m_HeightInput =         null;
     private Texture2D m_ReposeMask =          null;
+    private Texture2D m_CollisionMask =       null;
 
     //decent default values here
     private int m_NumHydraulicIterations =    300;
@@ -34,6 +35,7 @@ public class Erosion : EditorWindow {
     #region render textures
     private RenderTexture m_PrecipMaskRT;
     private RenderTexture m_ReposeMaskRT;
+    private RenderTexture m_CollisionRT;
 
     private RenderTexture m_TerrainHeightRT;
     private RenderTexture m_TerrainHeightPrevRT;
@@ -71,6 +73,11 @@ public class Erosion : EditorWindow {
         m_PrecipMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_PrecipMaskRT.enableRandomWrite = true;
         m_PrecipMaskRT.Create();
+
+        m_CollisionRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
+        m_CollisionRT.enableRandomWrite = true;
+        m_CollisionRT.format = RenderTextureFormat.RFloat;
+        m_CollisionRT.Create();
 
         m_ReposeMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_ReposeMaskRT.enableRandomWrite = true;
@@ -138,6 +145,7 @@ public class Erosion : EditorWindow {
         if (m_Init) {
             m_PrecipMaskRT.Release();
             m_ReposeMaskRT.Release();
+            m_CollisionRT.Release();
 
             m_TerrainHeightRT.Release();
             m_TerrainHeightPrevRT.Release();
@@ -181,6 +189,7 @@ public class Erosion : EditorWindow {
             }
             Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
             Graphics.Blit(m_ReposeMask, m_ReposeMaskRT);
+            Graphics.Blit(m_CollisionMask, m_CollisionRT);
         }
     }
 
@@ -249,6 +258,7 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetTexture(thermalKernelIdx, "Sediment", m_SedimentRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "SedimentPrev", m_SedimentPrevRT);
             m_ComputeShader.SetTexture(thermalKernelIdx, "ReposeMask", m_ReposeMaskRT);
+            m_ComputeShader.SetTexture(thermalKernelIdx, "Collision", m_CollisionRT);
 
             //diffuse height parameters
             m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeight", m_TerrainHeightRT);
@@ -290,6 +300,7 @@ public class Erosion : EditorWindow {
         m_TerrainTile = (Terrain)EditorGUILayout.ObjectField("Terrain Tile", m_TerrainTile, typeof(Terrain));
         m_HeightInput = (Texture2D)EditorGUILayout.ObjectField("Input Heightfield", m_HeightInput, typeof(Texture2D));
         m_PrecipitationMask = (Texture2D)EditorGUILayout.ObjectField("Precipitation Mask", m_PrecipitationMask, typeof(Texture2D));
+        m_CollisionMask = (Texture2D)EditorGUILayout.ObjectField("Collision Mask", m_CollisionMask, typeof(Texture2D));
         m_NumHydraulicIterations = EditorGUILayout.IntField("# Iterations", m_NumHydraulicIterations);
         m_DeltaTime = EditorGUILayout.FloatField("Simulation time step", m_DeltaTime);
         m_PrecipRate = EditorGUILayout.FloatField("Precipitation Rate", m_PrecipRate);
@@ -312,23 +323,32 @@ public class Erosion : EditorWindow {
         int x = 0;
         int y = dy;
 
-        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Level");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterRT);
-        x += 256 + 2; y = dy;
-        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Velocity");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterVelRT);
-        x += 256 + 2; y = dy;
-        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Flux");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_FluxRT);
+        if (m_Init) {
 
-        //bottom row
-        x = 0;
-        y += 256 + 30;
-        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
-        x += 256 + 2; y = dy + 256 + 30;
-        EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Output Height");
-        EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_TerrainHeightRT);
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Level");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterRT);
+            x += 256 + 2; y = dy;
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Velocity");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_WaterVelRT);
+            x += 256 + 2; y = dy;
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Water Flux");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_FluxRT);
+
+            //bottom row
+            int rowY = dy + 256 + 30;
+            x = 0;
+            y = rowY;
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Sediment");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_SedimentRT);
+
+            x += 256 + 2;
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Output Height");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_TerrainHeightRT);
+
+            x += 256 + 2;
+            EditorGUI.LabelField(new Rect(x, y - 20, 256, 256), "Collision");
+            EditorGUI.DrawPreviewTexture(new Rect(x, y, 256, 256), m_CollisionRT);
+        }
     }
 
     void OnGUI() {

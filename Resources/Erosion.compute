@@ -8,6 +8,7 @@
 
 RWTexture2D<float4> PrecipMask;  //defines where rainfall will occur
 RWTexture2D<float4> ReposeMask;
+RWTexture2D<float>  Collision;
 
 RWTexture2D<float>  TerrainHeight;      //terrain heightmap
 RWTexture2D<float>  TerrainHeightPrev;  //previous frame
@@ -245,6 +246,10 @@ void simulateThermalErosion(uint2 coord) {
 		return;
 	}
 
+	if (Collision[coord] > 0.5f) {
+		return;
+	}
+
 	float h = TerrainHeightPrev[coord];
 
 	float dhl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y)]);
@@ -256,6 +261,16 @@ void simulateThermalErosion(uint2 coord) {
 	float dhtr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y + 1)]);
 	float dhbl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y - 1)]);
 	float dhbr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y - 1)]);
+
+	if (Collision[uint2(coord.x - 1, coord.y)] > 0.5f) { dhl = 0.0f; }
+	if (Collision[uint2(coord.x + 1, coord.y)] > 0.5f) { dhr = 0.0f; }
+	if (Collision[uint2(coord.x, coord.y - 1)] > 0.5f) { dhb = 0.0f; }
+	if (Collision[uint2(coord.x, coord.y + 1)] > 0.5f) { dht = 0.0f; }
+
+	if (Collision[uint2(coord.x - 1, coord.y + 1)] > 0.5f) { dhtl = 0.0f; }
+	if (Collision[uint2(coord.x + 1, coord.y + 1)] > 0.5f) { dhtr = 0.0f; }
+	if (Collision[uint2(coord.x - 1, coord.y - 1)] > 0.5f) { dhbl = 0.0f; }
+	if (Collision[uint2(coord.x + 1, coord.y - 1)] > 0.5f) { dhbr = 0.0f; }
 	
 	float ml = abs(dhl / dxdy.x);
 	float mr = abs(dhr / dxdy.x);
@@ -306,7 +321,7 @@ void diffuseHeight(uint2 coord, float amt, int iterations) {
 void ThermalErosion(uint3 id : SV_DispatchThreadID)
 {
 	simulateThermalErosion(id.xy);
-	diffuseHeight(id.xy, saturate(0.0f * dt), 1);
+	//diffuseHeight(id.xy, saturate(0.0f * dt), 1);
 }
 
 #pragma kernel DiffuseHeight
