@@ -262,10 +262,10 @@ void simulateThermalErosion(uint2 coord) {
 	float dhbl = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x - 1, coord.y - 1)]);
 	float dhbr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y - 1)]);
 
-	if (Collision[uint2(coord.x - 1, coord.y)] > 0.5f) { dhl = 0.0f; }
-	if (Collision[uint2(coord.x + 1, coord.y)] > 0.5f) { dhr = 0.0f; }
-	if (Collision[uint2(coord.x, coord.y - 1)] > 0.5f) { dhb = 0.0f; }
-	if (Collision[uint2(coord.x, coord.y + 1)] > 0.5f) { dht = 0.0f; }
+	if (Collision[uint2(coord.x - 1, coord.y)] > 0.5f || coord.x == 0) { dhl = 0.0f; }
+	if (Collision[uint2(coord.x + 1, coord.y)] > 0.5f || coord.x == (int)texDim[0]) { dhr = 0.0f; }
+	if (Collision[uint2(coord.x, coord.y - 1)] > 0.5f || coord.y == 0) { dhb = 0.0f; }
+	if (Collision[uint2(coord.x, coord.y + 1)] > 0.5f || coord.y == (int)texDim[1]) { dht = 0.0f; }
 
 	if (Collision[uint2(coord.x - 1, coord.y + 1)] > 0.5f) { dhtl = 0.0f; }
 	if (Collision[uint2(coord.x + 1, coord.y + 1)] > 0.5f) { dhtr = 0.0f; }
