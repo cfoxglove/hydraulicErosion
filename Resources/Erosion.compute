@@ -36,71 +36,74 @@ float evaporationRate;
 float4 texDim;     //the dimensions of all of our textures (they must all be the same dimensions)
 float3 terrainDim; //the dimensions of the terrain in world units
 
+uint4 getSafeNeighbors(uint2 coord) {
+	return uint4(
+		(coord.x < (uint)texDim[0] - 1) ? coord.x + 1 : coord.x,  //right index
+		(coord.x > 0) ? coord.x - 1 : coord.x,                    //left index
+		(coord.y < (uint)texDim[1] - 1) ? coord.y + 1 : coord.y,  //top index
+		(coord.y > 0) ? coord.y - 1 : coord.y                     //bottom index
+		);
+}
+
 //use WaterPrev here because we have not yet calculated this frame's buffer
 float4 simulateFlux(uint2 coord) {
-	float cellSize = 1.0f;
+	float cellSize = 0.01f;
 	float g = -9.8f;
 	float h = TerrainHeightPrev[coord] + WaterPrev[coord];
 
-	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
-	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
-	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
-	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
+	uint4 nidx = getSafeNeighbors(coord);
 	
 	float fluxCapacitance = (dt * flowRate * g) / cellSize;
 
 	//left
 	float4 outFlux;
-	float dh = h - (TerrainHeightPrev[uint2(lidx, coord.y)] + WaterPrev[uint2(lidx, coord.y)]);
+	float dh = h - (TerrainHeightPrev[uint2(nidx.y, coord.y)] + WaterPrev[uint2(nidx.y, coord.y)]);
 	outFlux.x = max(0.0f, FluxPrev[coord].x + dh * fluxCapacitance);
 
 	//right
-	dh = h - (TerrainHeightPrev[uint2(ridx, coord.y)] + WaterPrev[uint2(ridx, coord.y)]);
+	dh = h - (TerrainHeightPrev[uint2(nidx.x, coord.y)] + WaterPrev[uint2(nidx.x, coord.y)]);
 	outFlux.y = max(0.0f, FluxPrev[coord].y + dh * fluxCapacitance);
 
 	//top
-	dh = h - (TerrainHeightPrev[uint2(coord.x, tidx)] + WaterPrev[uint2(coord.x, tidx)]);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, nidx.z)] + WaterPrev[uint2(coord.x, nidx.z)]);
 	outFlux.z = max(0.0f, FluxPrev[coord].z + dh * fluxCapacitance);
 
 	//bottom
-	dh = h - (TerrainHeightPrev[uint2(coord.x, bidx)] + WaterPrev[uint2(coord.x, bidx)]);
+	dh = h - (TerrainHeightPrev[uint2(coord.x, nidx.w)] + WaterPrev[uint2(coord.x, nidx.w)]);
 	outFlux.w = max(0.0f, FluxPrev[coord].w + dh * fluxCapacitance);
 
 	return outFlux;
 }
 
 float2 simulateWaterVelocity(uint2 coord) {
-	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
-	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
-	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
-	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
+	uint4 nidx = getSafeNeighbors(coord);
 
-	float inFlow = Flux[uint2(lidx, coord.y)].y +
-				   Flux[uint2(ridx, coord.y)].x +
-				   Flux[uint2(coord.x, bidx)].z +
-				   Flux[uint2(coord.x, tidx)].w;
+	//use flux here because we've already computed this for this frame
+	float inFlow = Flux[uint2(nidx.y, coord.y)].y +
+				   Flux[uint2(nidx.x, coord.y)].x +
+				   Flux[uint2(coord.x, nidx.w)].z +
+				   Flux[uint2(coord.x, nidx.z)].w;
 
 	float outFlow = Flux[coord].x + Flux[coord].y + Flux[coord].z + Flux[coord].w;
 
-	float dx = 1.0f; //grid dims?
-	float dy = 1.0f; 
+	float dx = 1.0f / texDim[0];
+	float dy = 1.0f / texDim[1]; 
 
-	//??? why are we updating water here???
 	float dV = dt * (inFlow - outFlow);
-	float oldWater = Water[coord];
-	Water[coord] += dV / (dx * dy);
-	Water[coord] = max(0.0f, Water[coord]);
+	float waterNew = WaterPrev[coord] + dV / (dx * dy);
+	Water[coord] = max(0.0f, waterNew);
 
 	//update velocities
-	float meanWater = 0.5f * (oldWater + Water[coord]);
+	float meanWater = 0.5f * (WaterPrev[coord] + Water[coord]);
 	float2 newWaterVel;
 	if (meanWater == 0.0f) {
 		newWaterVel = float2(0.0f, 0.0f);
 	}
 	else {
 		//I'm not confident on this line - should this be 1/meanWater or meanWater???
-		newWaterVel.x = meanWater * 0.5f * (Flux[uint2(lidx, coord.y)].y - Flux[coord].x - Flux[uint2(ridx, coord.y)].x + Flux[coord].y) / (dy);// *meanWater);
-		newWaterVel.y = meanWater * 0.5f * (Flux[uint2(coord.x, bidx)].z - Flux[coord].w - Flux[uint2(coord.x, tidx)].w + Flux[coord].z) / (dx);// *meanWater);
+		meanWater = 1.0f / meanWater;
+		newWaterVel.x = meanWater * 0.5f * (Flux[uint2(nidx.y, coord.y)].y - Flux[coord].x - Flux[uint2(nidx.x, coord.y)].x + Flux[coord].y) / (dy);
+		newWaterVel.y = meanWater * 0.5f * (Flux[uint2(coord.x, nidx.w)].z - Flux[coord].w - Flux[uint2(coord.x, nidx.z)].w + Flux[coord].z) / (dx);
 	}
 
 	return newWaterVel;
@@ -172,13 +175,10 @@ void simulateErosion(uint2 coord) {
 	float sediment = SedimentPrev[coord];
 	float terrainHeight = TerrainHeightPrev[coord];
 
-	uint ridx = (coord.x < (uint)texDim[0]) ? coord.x + 1 : coord.x;
-	uint lidx = (coord.x > 0) ? coord.x - 1 : coord.x;
-	uint tidx = (coord.y < (uint)texDim[1]) ? coord.y + 1 : coord.y;
-	uint bidx = (coord.y < 0) ? coord.y - 1 : coord.y;
+	uint4 nidx = getSafeNeighbors(coord);
 
-	float3 n = float3(TerrainHeightPrev[uint2(ridx, coord.y)] - TerrainHeightPrev[uint2(lidx, coord.y)],
-					  TerrainHeightPrev[uint2(coord.x, tidx)] - TerrainHeightPrev[uint2(coord.x, bidx)],
+	float3 n = float3(TerrainHeightPrev[uint2(nidx.x, coord.y)] - TerrainHeightPrev[uint2(nidx.y, coord.y)],
+					  TerrainHeightPrev[uint2(coord.x, nidx.z)] - TerrainHeightPrev[uint2(coord.x, nidx.w)],
 					  2.0f);
 	n = normalize(n);
 	float cosa = dot(n, float3(0.0f, 0.0f, 1.0f));
@@ -212,8 +212,17 @@ void simulateErosion(uint2 coord) {
 
 void simulateSedimentTransport(uint2 coord) {
 	//use WaterVel not WaterVelPrev because we calculated it in the previous stage
-	float fromX = (float)coord.x - WaterVel[coord].x;
-	float fromY = (float)coord.y - WaterVel[coord].y;
+	float velScalar = 0.01f; //should be a setting?
+	float fromX = (float)coord.x - velScalar * WaterVel[coord].x;
+	float fromY = (float)coord.y - velScalar * WaterVel[coord].y;
+
+	//boundary conditions
+	if (fromX < 0.0f) { fromX = 0.0f; }
+	if (fromX >= (float)(texDim[0] - 1)) { fromX = (float)texDim[0] - 1.0f; }
+
+	if (fromY < 0) { fromY = 0.0f; }
+	if (fromY >= (float)(texDim[1] - 1)) { fromY = (float)texDim[1] - 1.0f; }
+	
 
 	uint2 cell0 = uint2((uint)fromX, (uint)fromY);
 	uint2 cell1 = cell0 + uint2(1, 1);
@@ -242,9 +251,9 @@ float4 dxdy; //<dx, dy, dxy, 0.0>
 int numThermalIterations;
 
 void simulateThermalErosion(uint2 coord) {
-	if (coord.x <= 0 || coord.x > (uint)texDim[0] || coord.y <= 0 || coord.y > (uint)texDim[1]) {
+	/*if (coord.x <= 0 || coord.x > (uint)texDim[0] || coord.y <= 0 || coord.y > (uint)texDim[1]) {
 		return;
-	}
+	}*/
 
 	if (Collision[coord] > 0.5f) {
 		return;
@@ -263,9 +272,9 @@ void simulateThermalErosion(uint2 coord) {
 	float dhbr = terrainDim[1] * (h - TerrainHeightPrev[uint2(coord.x + 1, coord.y - 1)]);
 
 	if (Collision[uint2(coord.x - 1, coord.y)] > 0.5f || coord.x == 0) { dhl = 0.0f; }
-	if (Collision[uint2(coord.x + 1, coord.y)] > 0.5f || coord.x == (int)texDim[0]) { dhr = 0.0f; }
+	if (Collision[uint2(coord.x + 1, coord.y)] > 0.5f || coord.x == (uint)texDim[0]) { dhr = 0.0f; }
 	if (Collision[uint2(coord.x, coord.y - 1)] > 0.5f || coord.y == 0) { dhb = 0.0f; }
-	if (Collision[uint2(coord.x, coord.y + 1)] > 0.5f || coord.y == (int)texDim[1]) { dht = 0.0f; }
+	if (Collision[uint2(coord.x, coord.y + 1)] > 0.5f || coord.y == (uint)texDim[1]) { dht = 0.0f; }
 
 	if (Collision[uint2(coord.x - 1, coord.y + 1)] > 0.5f) { dhtl = 0.0f; }
 	if (Collision[uint2(coord.x + 1, coord.y + 1)] > 0.5f) { dhtr = 0.0f; }

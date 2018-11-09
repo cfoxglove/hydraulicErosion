@@ -15,15 +15,19 @@ public class Erosion : EditorWindow {
 
     //decent default values here
     private int m_NumHydraulicIterations =    300;
-    private int m_NumThermalIterations =      10;
+    private int m_NumHydroThermalIterations = 10;
 
-    private float m_DeltaTime =               0.01f;
+
+    private int m_NumThermalIterations =      100;
+
+
+    private float m_DeltaTime =               0.001f;
     private float m_PrecipRate =              0.1f;
-    private float m_FlowRate =               -0.07f;
-    private float m_SedimentCapacity =        50.0f;
-    private float m_SedimentDissolveRate =    0.01f;
-    private float m_SedimentDepositRate =     0.01f;
-    private float m_EvaporationRate =         0.0001f;
+    private float m_FlowRate =                0.0003f;
+    private float m_SedimentCapacity =        5.0f;
+    private float m_SedimentDissolveRate =    0.00005f;
+    private float m_SedimentDepositRate =     0.0002f;
+    private float m_EvaporationRate =         0.0003f;
     private float m_SmoothingFactor =         0.05f;
     #endregion
 
@@ -68,7 +72,7 @@ public class Erosion : EditorWindow {
         if(m_Init == true) { return; }
 
         m_texDim[0] = m_texDim[1] = m_TerrainTile.terrainData.heightmapResolution;
-        Debug.Log("Initializing textures at " + m_texDim[0]);
+        //Debug.Log("Initializing textures at " + m_texDim[0]);
 
         m_PrecipMaskRT = new RenderTexture(m_texDim[0], m_texDim[1], 0);
         m_PrecipMaskRT.enableRandomWrite = true;
@@ -183,7 +187,6 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightRT);
                 Graphics.Blit(m_TerrainTile.terrainData.heightmapTexture, m_TerrainHeightPrevRT);
             } else {
-                Debug.Log("Using texture as heightfield");
                 Graphics.Blit(m_HeightInput, m_TerrainHeightRT);
                 Graphics.Blit(m_HeightInput, m_TerrainHeightPrevRT);
             }
@@ -208,7 +211,7 @@ public class Erosion : EditorWindow {
             //precompute some values on the CPU (constants in the shader)
             Vector2 m = new Vector2(Mathf.Tan(m_AngleOfRepose.x * Mathf.Deg2Rad), Mathf.Tan(m_AngleOfRepose.y * Mathf.Deg2Rad));
             float dx = m_texDim[0] / m_TerrainTile.terrainData.size.x;
-            float dy = m_texDim[1] / m_TerrainTile.terrainData.size.y;
+            float dy = m_texDim[1] / m_TerrainTile.terrainData.size.z;
             float dxy = Mathf.Sqrt(dx * dx + dy * dy);
 
             Debug.Log(m_TerrainTile.terrainData.size);
@@ -266,6 +269,8 @@ public class Erosion : EditorWindow {
 
 
             for (int i = 0; i < m_NumHydraulicIterations; i++) {
+                m_ComputeShader.SetFloat("dt", m_DeltaTime);
+
                 float rainScale = Mathf.Lerp(100.0f, 500.0f, Random.value);
                 float rainPos = rainScale * Random.value;
                 m_ComputeShader.SetFloat("rainPosition", rainPos);
@@ -278,9 +283,18 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_WaterRT, m_WaterPrevRT);
                 Graphics.Blit(m_WaterVelRT, m_WaterVelPrevRT);
                 Graphics.Blit(m_FluxRT, m_FluxPrevRT);
+
+                for(int j = 0; j < m_NumHydroThermalIterations; j++) {
+                    m_ComputeShader.SetFloat("dt", m_DeltaTime * 0.1f); //really just want an overall multiplier on thermal erosion
+                    m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
+                    Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
+                    Graphics.Blit(m_SedimentRT, m_SedimentPrevRT);
+                }
             }
 
+            m_ComputeShader.SetFloat("dt", m_DeltaTime); //really just want an overall multiplier on thermal erosion
             for (int j = 0; j < m_NumThermalIterations; j++) {
+                
                 m_ComputeShader.Dispatch(thermalKernelIdx, m_texDim[0] / numWorkGroups[0], m_texDim[1] / numWorkGroups[1], numWorkGroups[2]);
                 Graphics.Blit(m_TerrainHeightRT, m_TerrainHeightPrevRT);
                 Graphics.Blit(m_SedimentRT, m_SedimentPrevRT);
@@ -301,7 +315,8 @@ public class Erosion : EditorWindow {
         m_HeightInput = (Texture2D)EditorGUILayout.ObjectField("Input Heightfield", m_HeightInput, typeof(Texture2D));
         m_PrecipitationMask = (Texture2D)EditorGUILayout.ObjectField("Precipitation Mask", m_PrecipitationMask, typeof(Texture2D));
         m_CollisionMask = (Texture2D)EditorGUILayout.ObjectField("Collision Mask", m_CollisionMask, typeof(Texture2D));
-        m_NumHydraulicIterations = EditorGUILayout.IntField("# Iterations", m_NumHydraulicIterations);
+        m_NumHydraulicIterations = EditorGUILayout.IntField("# Hydraulic Iterations", m_NumHydraulicIterations);
+        m_NumHydroThermalIterations = EditorGUILayout.IntField("# Thermal Iterations", m_NumHydroThermalIterations);
         m_DeltaTime = EditorGUILayout.FloatField("Simulation time step", m_DeltaTime);
         m_PrecipRate = EditorGUILayout.FloatField("Precipitation Rate", m_PrecipRate);
         m_FlowRate = EditorGUILayout.FloatField("Flow Rate", m_FlowRate);
