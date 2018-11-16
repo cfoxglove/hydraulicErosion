@@ -176,7 +176,7 @@ public class Erosion : EditorWindow {
     #region sim
     ComputeShader GetComputeShader() {
         if (m_ComputeShader == null) {
-            m_ComputeShader = (ComputeShader)Resources.Load("Erosion");
+            m_ComputeShader = (ComputeShader)Resources.Load("ErosionBrush");
         }
         return m_ComputeShader;
     }
@@ -190,9 +190,9 @@ public class Erosion : EditorWindow {
                 Graphics.Blit(m_HeightInput, m_TerrainHeightRT);
                 Graphics.Blit(m_HeightInput, m_TerrainHeightPrevRT);
             }
-            Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT);
-            Graphics.Blit(m_ReposeMask, m_ReposeMaskRT);
-            Graphics.Blit(m_CollisionMask, m_CollisionRT);
+            if (m_PrecipMaskRT != null) { Graphics.Blit(m_PrecipitationMask, m_PrecipMaskRT); }
+            if (m_ReposeMask != null) { Graphics.Blit(m_ReposeMask, m_ReposeMaskRT); }
+            if (m_CollisionMask != null) { Graphics.Blit(m_CollisionMask, m_CollisionRT); }
         }
     }
 
@@ -206,7 +206,7 @@ public class Erosion : EditorWindow {
             int hydraulicKernelIdx = m_ComputeShader.FindKernel("HydraulicErosion");
             int thermalKernelIdx = m_ComputeShader.FindKernel("ThermalErosion");
             int waterFlowKernelIdx = m_ComputeShader.FindKernel("SimulateWaterFlow");
-            int diffuseHeightKernelIdx = m_ComputeShader.FindKernel("DiffuseHeight");
+            //int diffuseHeightKernelIdx = m_ComputeShader.FindKernel("DiffuseHeight");
 
             //precompute some values on the CPU (constants in the shader)
             Vector2 m = new Vector2(Mathf.Tan(m_AngleOfRepose.x * Mathf.Deg2Rad), Mathf.Tan(m_AngleOfRepose.y * Mathf.Deg2Rad));
@@ -264,8 +264,8 @@ public class Erosion : EditorWindow {
             m_ComputeShader.SetTexture(thermalKernelIdx, "Collision", m_CollisionRT);
 
             //diffuse height parameters
-            m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeight", m_TerrainHeightRT);
-            m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
+            //m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeight", m_TerrainHeightRT);
+            //m_ComputeShader.SetTexture(diffuseHeightKernelIdx, "TerrainHeightPrev", m_TerrainHeightPrevRT);
 
 
             for (int i = 0; i < m_NumHydraulicIterations; i++) {
